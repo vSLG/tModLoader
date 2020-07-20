@@ -86,5 +86,7 @@ namespace Terraria
 
 			return r.Next(consequent) < antecedent;
 		}
+
+		public static bool Contains(this Rectangle rectangle, Vector2 point) => point.X >= rectangle.Left && point.X <= rectangle.Right && point.Y >= rectangle.Top && point.Y <= rectangle.Bottom;
 	}
 }

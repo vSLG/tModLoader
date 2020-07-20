@@ -2047,6 +2047,14 @@
  				if (npc[player[myPlayer].talkNPC].type == 20) {
  					SoundEngine.PlaySound(12);
  					npcChatText = Lang.GetDryadWorldStatusDialog();
+@@ -29645,6 +_,7 @@
+ 			TimeLogger.DetailedDrawTime(10);
+ 		}
+ 
++		private int npcShowRowIndex = 0;
+ 		protected void DrawInventory() {
+ 			Recipe.GetThroughDelayedFindRecipes();
+ 			if (ShouldPVPDraw)
 @@ -29911,7 +_,7 @@
  					num29++;
  
@@ -2135,6 +2143,76 @@
  				UILinkPointNavigator.Shortcuts.CRAFT_CurrentRecipeBig = -1;
  				UILinkPointNavigator.Shortcuts.CRAFT_CurrentRecipeSmall = -1;
  				if (numAvailableRecipes > 0)
+@@ -30607,13 +_,55 @@
+ 				Utils.DrawBorderStringFourWay(spriteBatch, FontAssets.MouseText.Value, Lang.inter[28].Value, 504f, invBottom, Microsoft.Xna.Framework.Color.White * ((float)(int)mouseTextColor / 255f), Microsoft.Xna.Framework.Color.Black, Vector2.Zero);
+ 				ItemSlot.DrawSavings(spriteBatch, 504f, invBottom);
+ 				inventoryScale = 0.755f;
+-				if (mouseX > 73 && mouseX < (int)(73f + 560f * inventoryScale) && mouseY > invBottom && mouseY < (int)((float)invBottom + 224f * inventoryScale) && !PlayerInput.IgnoreMouseInterface)
+-					player[myPlayer].mouseInterface = true;
++				if (mouseX > 73 && mouseX < (int)(73f + 560f * inventoryScale) && mouseY > invBottom && mouseY < (int)((float)invBottom + 224f * inventoryScale) && !PlayerInput.IgnoreMouseInterface) player[myPlayer].mouseInterface = true;
++
++				int pageButtonX = 33;
++				int height = (int)(4 * 56f * inventoryScale);
++				int pageButtonY = invBottom + height / 2;
++				int pageButtonSizeX = 22;
++				int pageButtonSizeY = 32;
++				int rows = shop[npcShop].item.Length / 10;
++				int maxRowIndex = rows - 4;
++				
++				Rectangle upButton = new Rectangle(pageButtonX, pageButtonY - 20 - pageButtonSizeY, pageButtonSizeX, pageButtonSizeY);
++				Rectangle downButton = new Rectangle(pageButtonX, pageButtonY + 12, pageButtonSizeX, pageButtonSizeY);
++
++				spriteBatch.Draw(UICommon.ButtonPreviousPage.Value, upButton, Color.White);
++				spriteBatch.Draw(UICommon.ButtonNextPage.Value, downButton, Color.White);
++
++				string rowText = $"{npcShowRowIndex * 10 + 1}-{(npcShowRowIndex + 4) * 10}";
++				Vector2 rowTextOrigin = FontAssets.MouseText.Value.MeasureString(rowText);
++				ChatManager.DrawColorCodedStringWithShadow(spriteBatch, FontAssets.MouseText.Value, rowText, new Vector2(pageButtonX + pageButtonSizeX / 2, pageButtonY),Color.White,  0f,
++					rowTextOrigin * 0.5f, Vector2.One);				
++
++				if (upButton.Contains(MouseScreen)) {
++					if (mouseLeft && mouseLeftRelease) {
++						if (npcShowRowIndex > 0) {
++							npcShowRowIndex--;
++							SoundEngine.PlaySound(SoundID.MenuTick);
++						}
++					}
++
++					hoverItemName = "Previous row";
++					LocalPlayer.mouseInterface = true;
++				}
++
++				if (downButton.Contains(MouseScreen)) {
++					if (mouseLeft && mouseLeftRelease) {
++						if (npcShowRowIndex < maxRowIndex) {
++							npcShowRowIndex++;
++							SoundEngine.PlaySound(SoundID.MenuTick);
++						}
++					}
++
++					hoverItemName = "Next row";
++					LocalPlayer.mouseInterface = true;
++				}
+ 
+ 				for (int num104 = 0; num104 < 10; num104++) {
+-					for (int num105 = 0; num105 < 4; num105++) {
++					for (int num105 = npcShowRowIndex; num105 < npcShowRowIndex + 4; num105++) {
+ 						int num106 = (int)(73f + (float)(num104 * 56) * inventoryScale);
+-						int num107 = (int)((float)invBottom + (float)(num105 * 56) * inventoryScale);
++						int num107 = (int)((float)invBottom + (float)((num105 - npcShowRowIndex) * 56) * inventoryScale);
+ 						int slot3 = num104 + num105 * 10;
+ 						new Microsoft.Xna.Framework.Color(100, 100, 100, 100);
+ 						if (mouseX >= num106 && (float)mouseX <= (float)num106 + (float)TextureAssets.InventoryBack.Width() * inventoryScale && mouseY >= num107 && (float)mouseY <= (float)num107 + (float)TextureAssets.InventoryBack.Height() * inventoryScale && !PlayerInput.IgnoreMouseInterface) {
+@@ -30628,7 +_,8 @@
+ 					}
+ 				}
+ 			}
+-
++			else npcShowRowIndex = 0;
++			
+ 			if (player[myPlayer].chest > -1 && !tileContainer[tile[player[myPlayer].chestX, player[myPlayer].chestY].type]) {
+ 				player[myPlayer].chest = -1;
+ 				Recipe.FindRecipes();
 @@ -31011,6 +_,11 @@
  				inventoryScale = 0.755f;
  				num += 5;

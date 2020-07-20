@@ -84,11 +84,12 @@
  				}
  			}
  
-@@ -504,14 +_,16 @@
+@@ -504,14 +_,17 @@
  			}
  		}
  
 -		public void AddItemToShop(Item newItem) {
++		// todo: fix this
 +		public int AddItemToShop(Item newItem) { //tML: Now returns the item's index.
  			int num = Main.shopSellbackHelper.Remove(newItem);
 +			/*

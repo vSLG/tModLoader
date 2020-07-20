@@ -83,6 +83,8 @@ namespace Terraria.ModLoader.UI
 		internal static Asset<Texture2D> ButtonDownloadMultipleTexture;
 		internal static Asset<Texture2D> ButtonModInfoTexture;
 		internal static Asset<Texture2D> ButtonModConfigTexture;
+		internal static Asset<Texture2D> ButtonPreviousPage;
+		internal static Asset<Texture2D> ButtonNextPage;
 
 		internal static Asset<Texture2D> DividerTexture;
 		internal static Asset<Texture2D> InnerPanelTexture;
@@ -106,6 +108,8 @@ namespace Terraria.ModLoader.UI
 			ButtonDownloadMultipleTexture = LoadEmbeddedTexture("UI.ButtonDownloadMultiple");
 			ButtonModInfoTexture = LoadEmbeddedTexture("UI.ButtonModInfo");
 			ButtonModConfigTexture = LoadEmbeddedTexture("UI.ButtonModConfig");
+			ButtonPreviousPage = LoadEmbeddedTexture("UI.ButtonPreviousPage");
+			ButtonNextPage = LoadEmbeddedTexture("UI.ButtonNextPage");
 
 			DividerTexture = Main.Assets.Request<Texture2D>("Images/UI/Divider");
 			InnerPanelTexture = Main.Assets.Request<Texture2D>("Images/UI/InnerPanelBackground");
