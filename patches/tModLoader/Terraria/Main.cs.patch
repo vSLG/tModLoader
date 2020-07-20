@@ -2154,8 +2154,8 @@
 +				int pageButtonX = 33;
 +				int height = (int)(4 * 56f * inventoryScale);
 +				int pageButtonY = invBottom + height / 2;
-+				int pageButtonSizeX = 22;
-+				int pageButtonSizeY = 32;
++				int pageButtonSizeX = 14;
++				int pageButtonSizeY = 22;
 +				int rows = shop[npcShop].item.Length / 10;
 +				int maxRowIndex = rows - 4;
 +				
