@@ -1,5 +1,13 @@
 --- src/Terraria/Terraria/Chest.cs
 +++ src/tModLoader/Terraria/Chest.cs
+@@ -1,5 +_,7 @@
+ using Microsoft.Xna.Framework;
++using System;
+ using System.Collections.Generic;
++using System.Linq;
+ using Terraria.Audio;
+ using Terraria.DataStructures;
+ using Terraria.GameContent.Achievements;
 @@ -7,6 +_,7 @@
  using Terraria.GameContent.Events;
  using Terraria.ID;
@@ -125,11 +133,50 @@
  		}
  
  		public void SetupShop(int type) {
-@@ -2508,6 +_,7 @@
+@@ -2508,11 +_,12 @@
  					array[num++].SetDefaults(4921);
  			}
  
-+			NPCLoader.SetupShop(type, this, ref num);
- 			for (int num12 = 0; num12 < num; num12++) {
- 				array[num12].isAShopItem = true;
++			NPCLoader.SetupShop(type, this, flag);
+-			for (int num12 = 0; num12 < num; num12++) {
++			for (int i = 0; i < item.Length; i++) {
+-				array[num12].isAShopItem = true;
++				item[i].isAShopItem = true;
  			}
+ 		}
+-
++		
+ 		private static bool BestiaryGirl_IsFairyTorchAvailable() {
+ 			if (!DidDiscoverBestiaryEntry(585))
+ 				return false;
+@@ -2559,6 +_,30 @@
+ 						chest.frame = 1;
+ 				}
+ 			}
++		}
++	}
++
++	public static class ChestUtils
++	{
++		public static void AddShopItem(this Chest chest, Item item) {
++			int index = Array.FindIndex(chest.item, item => item.IsAir);
++			if (index == -1) {
++				int length = chest.item.Length;
++				Array.Resize(ref chest.item, length + 10);
++				for (int i = length; i < length + 10; i++) {
++					chest.item[i] = new Item();
++				}
++
++				index = length;
++			}
++
++			chest.item[index] = item.Clone();
++			chest.item[index].favorited = false;
++		}
++
++		public static void AddShopItem(this Chest chest, int type) {
++			var item = new Item(type);
++			chest.AddShopItem(item);
+ 		}
+ 	}
+ }

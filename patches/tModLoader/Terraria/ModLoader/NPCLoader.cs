@@ -905,18 +905,18 @@ namespace Terraria.ModLoader
 			}
 		}
 
-		private delegate void DelegateSetupShop(int type, Chest shop, ref int nextSlot);
+		private delegate void DelegateSetupShop(int type, Chest shop, bool maxHappiness);
 		private static HookList HookSetupShop = AddHook<DelegateSetupShop>(g => g.SetupShop);
 
-		public static void SetupShop(int type, Chest shop, ref int nextSlot) {
+		public static void SetupShop(int type, Chest shop, bool maxHappiness) {
 			if (type < shopToNPC.Length) {
 				type = shopToNPC[type];
 			}
 			else {
-				GetNPC(type)?.SetupShop(shop, ref nextSlot);
+				GetNPC(type)?.SetupShop(shop, maxHappiness);
 			}
 			foreach (GlobalNPC g in HookSetupShop.arr) {
-				g.SetupShop(type, shop, ref nextSlot);
+				g.SetupShop(type, shop, maxHappiness);
 			}
 		}
 

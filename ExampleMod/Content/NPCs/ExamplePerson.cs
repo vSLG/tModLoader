@@ -166,39 +166,44 @@ namespace ExampleMod.Content.NPCs
 			}
 		}
 
-		public override void SetupShop(Chest shop, ref int nextSlot) {
-			shop.item[nextSlot++].SetDefaults(ItemType<ExampleItem>());
-			// shop.item[nextSlot].SetDefaults(ItemType<EquipMaterial>());
-			// nextSlot++;
-			// shop.item[nextSlot].SetDefaults(ItemType<BossItem>());
-			// nextSlot++;
-			shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleWorkbench>());
-			shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleChair>());
-			shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleDoor>());
-			shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleBed>());
-			shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleChest>());
-			shop.item[nextSlot++].SetDefaults(ItemType<ExamplePickaxe>());
-			shop.item[nextSlot++].SetDefaults(ItemType<ExampleHamaxe>());
+		public override void SetupShop(Chest shop, bool maxHappiness) {
 
-			if (Main.LocalPlayer.HasBuff(BuffID.Lifeforce)) {
-				shop.item[nextSlot++].SetDefaults(ItemType<ExampleHealingPotion>());
+			for (int i = 0; i < 51; i++) {
+				shop.AddShopItem(ItemType<ExampleItem>());
 			}
-
-			// if (Main.LocalPlayer.GetModPlayer<ExamplePlayer>().ZoneExample && !GetInstance<ExampleConfigServer>().DisableExampleWings) {
-			// 	shop.item[nextSlot].SetDefaults(ItemType<ExampleWings>());
-			// 	nextSlot++;
+		
+			// shop.item[nextSlot++].SetDefaults(ItemType<ExampleItem>());
+			// // shop.item[nextSlot].SetDefaults(ItemType<EquipMaterial>());
+			// // nextSlot++;
+			// // shop.item[nextSlot].SetDefaults(ItemType<BossItem>());
+			// // nextSlot++;
+			// shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleWorkbench>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleChair>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleDoor>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleBed>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<Items.Placeable.Furniture.ExampleChest>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<ExamplePickaxe>());
+			// shop.item[nextSlot++].SetDefaults(ItemType<ExampleHamaxe>());
+			//
+			// if (Main.LocalPlayer.HasBuff(BuffID.Lifeforce)) {
+			// 	shop.item[nextSlot++].SetDefaults(ItemType<ExampleHealingPotion>());
 			// }
-
-			if (Main.moonPhase < 2) {
-				shop.item[nextSlot++].SetDefaults(ItemType<ExampleSword>());
-			}
-			else if (Main.moonPhase < 4) {
-				// shop.item[nextSlot++].SetDefaults(ItemType<ExampleGun>());
-				shop.item[nextSlot].SetDefaults(ItemType<ExampleBullet>());
-			}
-			else if (Main.moonPhase < 6) {
-				// shop.item[nextSlot++].SetDefaults(ItemType<ExampleStaff>());
-			}
+			//
+			// // if (Main.LocalPlayer.GetModPlayer<ExamplePlayer>().ZoneExample && !GetInstance<ExampleConfigServer>().DisableExampleWings) {
+			// // 	shop.item[nextSlot].SetDefaults(ItemType<ExampleWings>());
+			// // 	nextSlot++;
+			// // }
+			//
+			// if (Main.moonPhase < 2) {
+			// 	shop.item[nextSlot++].SetDefaults(ItemType<ExampleSword>());
+			// }
+			// else if (Main.moonPhase < 4) {
+			// 	// shop.item[nextSlot++].SetDefaults(ItemType<ExampleGun>());
+			// 	shop.item[nextSlot].SetDefaults(ItemType<ExampleBullet>());
+			// }
+			// else if (Main.moonPhase < 6) {
+			// 	// shop.item[nextSlot++].SetDefaults(ItemType<ExampleStaff>());
+			// }
 
 			// todo: Here is an example of how your npc can sell items from other mods.
 			// var modSummonersAssociation = ModLoader.GetMod("SummonersAssociation");
