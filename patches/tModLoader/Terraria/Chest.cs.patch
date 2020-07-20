@@ -84,44 +84,52 @@
  				}
  			}
  
-@@ -504,14 +_,17 @@
+@@ -504,30 +_,25 @@
  			}
  		}
  
 -		public void AddItemToShop(Item newItem) {
-+		// todo: fix this
-+		public int AddItemToShop(Item newItem) { //tML: Now returns the item's index.
++		public int SellItemToShop(Item newItem) {
++			//tML: Now returns the item's index.
  			int num = Main.shopSellbackHelper.Remove(newItem);
 +			/*
  			if (num >= newItem.stack)
  				return;
-+			*/
- 
- 			int num2 = 0;
- 			while (true) {
+-
+-			int num2 = 0;
+-			while (true) {
 -				if (num2 < 39) {
-+				if (num2 < 38) { // tModLoader change: When selling to vendor with full inventory, replace 2nd to last item rather than have the item disappear to facilitate PostSellItem Item reference.
- 					if (item[num2] == null || item[num2].type == 0)
- 						break;
- 
-@@ -519,7 +_,7 @@
- 					continue;
- 				}
- 
+-					if (item[num2] == null || item[num2].type == 0)
+-						break;
+-
+-					num2++;
+-					continue;
+-				}
+-
 -				return;
-+				break;
++			*/
++
++			int sellIndex = Array.FindIndex(item, item => item == null || item.type == 0);
++			// tModLoader change: When selling to vendor with full inventory, replace 2nd to last item rather than have the item disappear to facilitate PostSellItem Item reference.
++			if (sellIndex == -1) {
++				sellIndex = item.Length - 2;
  			}
  
- 			item[num2] = newItem.Clone();
-@@ -528,6 +_,7 @@
- 			item[num2].stack -= num;
- 			_ = item[num2].value;
- 			_ = 0;
+-			item[num2] = newItem.Clone();
++			item[sellIndex] = newItem.Clone();
+-			item[num2].favorited = false;
++			item[sellIndex].favorited = false;
+-			item[num2].buyOnce = true;
++			item[sellIndex].buyOnce = true;
+-			item[num2].stack -= num;
++			// item[sellIndex].stack -= num;
+-			_ = item[num2].value;
+-			_ = 0;
 +			return num;
  		}
  
  		public static void SetupTravelShop() {
-@@ -877,9 +_,12 @@
+@@ -877,15 +_,18 @@
  							Main.travelShop[num2++] = 3636;
  							Main.travelShop[num2++] = 3641;
  							break;
@@ -134,6 +142,13 @@
  		}
  
  		public void SetupShop(int type) {
+ 			bool flag = Main.LocalPlayer.currentShoppingSettings.PriceAdjustment <= 0.8500000238418579;
+ 			Item[] array = item;
+-			for (int i = 0; i < 40; i++) {
++			for (int i = 0; i < item.Length; i++) {
+ 				array[i] = new Item();
+ 			}
+ 
 @@ -2508,11 +_,12 @@
  					array[num++].SetDefaults(4921);
  			}

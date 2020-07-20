@@ -30,14 +30,14 @@
  						Chest chest = Main.instance.shop[Main.npcShop];
  						if (player.SellItem(Main.mouseItem)) {
 -							chest.AddItemToShop(Main.mouseItem);
-+							int soldItemIndex = chest.AddItemToShop(Main.mouseItem);
++							int soldItemIndex = chest.SellItemToShop(Main.mouseItem);
  							Main.mouseItem.SetDefaults();
  							SoundEngine.PlaySound(18);
 +							PlayerHooks.PostSellItem(player, Main.npc[player.talkNPC], chest.item, chest.item[soldItemIndex]);
  						}
  						else if (Main.mouseItem.value == 0) {
 -							chest.AddItemToShop(Main.mouseItem);
-+							int soldItemIndex = chest.AddItemToShop(Main.mouseItem);
++							int soldItemIndex = chest.SellItemToShop(Main.mouseItem);
  							Main.mouseItem.SetDefaults();
  							SoundEngine.PlaySound(7);
 +							PlayerHooks.PostSellItem(player, Main.npc[player.talkNPC], chest.item, chest.item[soldItemIndex]);
@@ -57,7 +57,7 @@
 +				if (inv[slot].type < 71 || inv[slot].type > 74 && PlayerHooks.CanSellItem(player, Main.npc[player.talkNPC], chest.item, inv[slot])) {					
  					if (player.SellItem(inv[slot])) {
 -						chest.AddItemToShop(inv[slot]);
-+						int soldItemIndex = chest.AddItemToShop(inv[slot]);
++						int soldItemIndex = chest.SellItemToShop(inv[slot]);
  						inv[slot].SetDefaults();
  						SoundEngine.PlaySound(18);
  						Recipe.FindRecipes();
@@ -65,7 +65,7 @@
  					}
  					else if (inv[slot].value == 0) {
 -						chest.AddItemToShop(inv[slot]);
-+						int soldItemIndex = chest.AddItemToShop(inv[slot]);
++						int soldItemIndex = chest.SellItemToShop(inv[slot]);
  						inv[slot].SetDefaults();
  						SoundEngine.PlaySound(7);
  						Recipe.FindRecipes();
