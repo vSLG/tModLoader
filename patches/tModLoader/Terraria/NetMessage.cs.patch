@@ -49,6 +49,20 @@
  						break;
  					case 3:
  						writer.Write((byte)remoteClient);
+@@ -105,7 +_,12 @@
+ 							writer.Write((byte)player4.skinVariant);
+ 							writer.Write((byte)player4.hair);
+ 							writer.Write(player4.name);
++
++							if (ModNet.AllowVanillaClients)
++								writer.Write((byte)player4.hairDye);
++							else
+-							writer.Write(player4.hairDye);
++								writer.WriteVarInt(player4.hairDye);
++
+ 							BitsByte bb14 = (byte)0;
+ 							for (int num15 = 0; num15 < 8; num15++) {
+ 								bb14[num15] = player4.hideVisibleAccessory[num15];
 @@ -161,6 +_,7 @@
  							writer.Write((short)num23);
  							writer.Write((byte)number3);
@@ -73,7 +87,15 @@
  							break;
  						}
  					case 8:
-@@ -510,6 +_,7 @@
+@@ -503,13 +_,14 @@
+ 							writer.WriteVector2(item6.position);
+ 							writer.WriteVector2(item6.velocity);
+ 							writer.Write((short)item6.stack);
+-							writer.Write(item6.prefix);
++							writer.WriteExtendedVanillaByte(item6.prefix);
+ 							writer.Write((byte)number2);
+ 							short value4 = 0;
+ 							if (item6.active && item6.stack > 0)
  								value4 = (short)item6.netID;
  
  							writer.Write(value4);
@@ -131,9 +153,12 @@
  						writer.Write(number3);
  						writer.Write((byte)(number4 + 1f));
  						writer.Write((byte)number5);
-@@ -670,6 +_,7 @@
+@@ -668,8 +_,9 @@
+ 								value2 = 0;
+ 
  							writer.Write((short)item5.stack);
- 							writer.Write(item5.prefix);
+-							writer.Write(item5.prefix);
++							writer.WriteExtendedVanillaByte(item5.prefix);
  							writer.Write(value2);
 +							ItemIO.SendModData(item5, writer);
  							break;
@@ -167,6 +192,33 @@
  								writer.Write((ushort)Main.player[number].buffType[n]);
  							}
  
+@@ -1050,7 +_,7 @@
+ 							writer.Write((short)number2);
+ 							Item item3 = Main.player[(int)number4].inventory[(int)number3];
+ 							writer.Write((short)item3.netID);
+-							writer.Write(item3.prefix);
++							writer.WriteExtendedVanillaByte(item3.prefix);
+ 							writer.Write((short)number5);
+ 							break;
+ 						}
+@@ -1220,7 +_,7 @@
+ 							writer.Write((short)number2);
+ 							Item item2 = Main.player[(int)number4].inventory[(int)number3];
+ 							writer.Write((short)item2.netID);
+-							writer.Write(item2.prefix);
++							writer.WriteExtendedVanillaByte(item2.prefix);
+ 							writer.Write((short)number5);
+ 							break;
+ 						}
+@@ -1286,7 +_,7 @@
+ 							writer.Write((short)number2);
+ 							Item item = Main.player[(int)number4].inventory[(int)number3];
+ 							writer.Write((short)item.netID);
+-							writer.Write(item.prefix);
++							writer.WriteExtendedVanillaByte(item.prefix);
+ 							writer.Write((short)number5);
+ 							break;
+ 						}
 @@ -1325,7 +_,10 @@
  
  				int num25 = (int)writer.BaseStream.Position;

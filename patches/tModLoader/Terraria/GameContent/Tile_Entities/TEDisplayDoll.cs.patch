@@ -1,0 +1,37 @@
+--- src/Terraria/Terraria/GameContent/Tile_Entities/TEDisplayDoll.cs
++++ src/tModLoader/Terraria/GameContent/Tile_Entities/TEDisplayDoll.cs
+@@ -4,6 +_,7 @@
+ using Terraria.Audio;
+ using Terraria.DataStructures;
+ using Terraria.GameInput;
++using Terraria.ModLoader.IO;
+ using Terraria.UI;
+ 
+ namespace Terraria.GameContent.Tile_Entities
+@@ -106,7 +_,7 @@
+ 				Item item = _items[i];
+ 				if (!item.IsAir) {
+ 					writer.Write((short)item.netID);
+-					writer.Write(item.prefix);
++					ItemIO.WriteVanillaPrefix(item, writer);
+ 					writer.Write((short)item.stack);
+ 				}
+ 			}
+@@ -115,7 +_,7 @@
+ 				Item item2 = _dyes[j];
+ 				if (!item2.IsAir) {
+ 					writer.Write((short)item2.netID);
+-					writer.Write(item2.prefix);
++					ItemIO.WriteVanillaPrefix(item2, writer);
+ 					writer.Write((short)item2.stack);
+ 				}
+ 			}
+@@ -431,7 +_,7 @@
+ 
+ 			writer.Write((ushort)item.netID);
+ 			writer.Write((ushort)item.stack);
+-			writer.Write(item.prefix);
++			ItemIO.WriteVanillaPrefix(item, writer);
+ 		}
+ 
+ 		public void ReadItem(int itemIndex, BinaryReader reader, bool dye) {

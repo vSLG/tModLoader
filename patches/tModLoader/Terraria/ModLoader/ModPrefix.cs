@@ -9,7 +9,7 @@ namespace Terraria.ModLoader
 {
 	public abstract class ModPrefix:ModType
 	{
-		private static byte nextPrefix = PrefixID.Count;
+		private static int nextPrefix = PrefixID.Count;
 
 		// TODO storing twice? could see a better implementation
 		internal static readonly IList<ModPrefix> prefixes = new List<ModPrefix>();
@@ -22,13 +22,11 @@ namespace Terraria.ModLoader
 			}
 		}
 
-		internal static byte ReservePrefixID() {
+		internal static int ReservePrefixID() {
 			if (ModNet.AllowVanillaClients) throw new Exception("Adding items breaks vanilla client compatibility");
 			if (nextPrefix == 0) throw new Exception("Prefix ID limit has been broken");
 
-			byte reserveID = nextPrefix;
-			nextPrefix++;
-			return reserveID;
+			return nextPrefix++;
 		}
 
 		/// <summary>
@@ -37,7 +35,7 @@ namespace Terraria.ModLoader
 		/// </summary>
 		/// <param name="type"></param>
 		/// <returns></returns>
-		public static ModPrefix GetPrefix(byte type) {
+		public static ModPrefix GetPrefix(int type) {
 			return type >= PrefixID.Count && type < PrefixCount ? prefixes[type - PrefixID.Count] : null;
 		}
 
@@ -50,7 +48,7 @@ namespace Terraria.ModLoader
 			return new List<ModPrefix>(categoryPrefixes[category]);
 		}
 
-		public static byte PrefixCount => nextPrefix;
+		public static int PrefixCount => nextPrefix;
 
 		internal static void ResizeArrays() {
 			Array.Resize(ref Lang.prefix, nextPrefix);
@@ -68,7 +66,7 @@ namespace Terraria.ModLoader
 		/// Performs a mod prefix roll. If the vanillaWeight wins the roll, then prefix is unchanged.
 		/// </summary>
 		internal static void Roll(Item item, ref int prefix, int vanillaWeight, params PrefixCategory[] categories) {
-			WeightedRandom<byte> wr = new WeightedRandom<byte>();
+			WeightedRandom<int> wr = new WeightedRandom<int>();
 			foreach (PrefixCategory category in categories)
 				foreach (ModPrefix modPrefix in categoryPrefixes[category].Where(x => x.CanRoll(item)))
 					wr.Add(modPrefix.Type, modPrefix.RollChance(item));
@@ -79,7 +77,7 @@ namespace Terraria.ModLoader
 			prefix = wr.Get();
 		}
 
-		public byte Type {get;internal set;}
+		public int Type { get; internal set; }
 
 		public ModTranslation DisplayName {get;internal set;}
 

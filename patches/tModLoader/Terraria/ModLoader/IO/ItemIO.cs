@@ -15,6 +15,10 @@ namespace Terraria.ModLoader.IO
 			writer.Write(item.modItem != null ? 0 : item.netID);
 		}
 
+		internal static void WriteVanillaPrefix(Item item, BinaryWriter writer) {
+			writer.Write((byte)(item.prefix < PrefixID.Count ? item.prefix : 0));
+		}
+
 		public static TagCompound Save(Item item) {
 			var tag = new TagCompound();
 			if (item.type <= 0)
@@ -78,7 +82,7 @@ namespace Terraria.ModLoader.IO
 				item.Prefix(ModContent.TryFind(tag.GetString("modPrefixMod"), tag.GetString("modPrefixName"), out ModPrefix prefix) ? prefix.Type : 0);
 			}
 			else if (tag.ContainsKey("prefix")) {
-				item.Prefix(tag.GetByte("prefix"));
+				item.Prefix(tag.GetAsInt("prefix"));
 			}
 			item.stack = tag.Get<int?>("stack") ?? 1;
 			item.favorited = tag.GetBool("fav");
@@ -131,7 +135,7 @@ namespace Terraria.ModLoader.IO
 
 		public static void Send(Item item, BinaryWriter writer, bool writeStack = false, bool writeFavourite = false) {
 			writer.Write((short)item.netID);
-			writer.Write(item.prefix);
+			writer.WriteExtendedVanillaByte(item.prefix);
 			if (writeStack) writer.Write((short)item.stack);
 			if (writeFavourite) writer.Write(item.favorited);
 			SendModData(item, writer);
@@ -139,7 +143,8 @@ namespace Terraria.ModLoader.IO
 
 		public static void Receive(Item item, BinaryReader reader, bool readStack = false, bool readFavorite = false) {
 			item.netDefaults(reader.ReadInt16());
-			item.Prefix(reader.ReadByte());
+			item.Prefix(reader.ReadExtendedVanillaByte());
+
 			if (readStack) item.stack = reader.ReadInt16();
 			if (readFavorite) item.favorited = reader.ReadBoolean();
 			ReceiveModData(item, reader);

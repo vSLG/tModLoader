@@ -8,11 +8,12 @@
  using Terraria.Audio;
  using Terraria.Enums;
  using Terraria.GameContent;
-@@ -10,10 +_,11 @@
+@@ -10,10 +_,12 @@
  using Terraria.ID;
  using Terraria.UI;
  using Terraria.Utilities;
 +using Terraria.ModLoader;
++using Terraria.ModLoader.IO;
  
  namespace Terraria
  {
@@ -21,15 +22,36 @@
  	{
  		private string _nameOverride;
  		public const int luckPotionDuration1 = 10800;
-@@ -59,6 +_,8 @@
+@@ -49,7 +_,7 @@
+ 		public int tileWand = -1;
+ 		public bool wornArmor;
+ 		public int tooltipContext = -1;
+-		public byte dye;
++		public int dye; //Changed from byte to int.
+ 		public int fishingPole = 1;
+ 		public int bait;
+ 		public static int coinGrabRange = 350;
+@@ -59,8 +_,10 @@
  		public short makeNPC;
  		public bool expertOnly;
  		public bool expert;
 +		public bool masterOnly;
 +		public bool master;
  		public bool isAShopItem;
- 		public short hairDye = -1;
+-		public short hairDye = -1;
++		public int hairDye = -1; //Changed from short to int.
  		public byte paint;
+ 		public bool instanced;
+ 		public int ownIgnore = -1;
+@@ -144,7 +_,7 @@
+ 		public bool DD2Summon;
+ 		public int netID;
+ 		public int crit;
+-		public byte prefix;
++		public int prefix; //Changed from byte to int.
+ 		public bool melee;
+ 		public bool magic;
+ 		public bool ranged;
 @@ -156,6 +_,12 @@
  		public const int WALL_PLACEMENT_USETIME = 7;
  		public static int numberOfNewItems = 0;
@@ -226,7 +248,7 @@
  			if ((double)num14 >= 1.2)
  				rare += 2;
  			else if ((double)num14 >= 1.05)
-@@ -1073,12 +_,15 @@
+@@ -1073,17 +_,20 @@
  			else if ((double)num14 <= 0.95)
  				rare--;
  
@@ -244,6 +266,12 @@
  			}
  
  			num14 *= num14;
+ 			value = (int)((float)value * num14);
+-			prefix = (byte)num;
++			prefix = num;
+ 			return true;
+ 		}
+ 
 @@ -1116,6 +_,8 @@
  		public Rectangle getRect() => new Rectangle((int)position.X, (int)position.Y, width, height);
  
@@ -316,7 +344,7 @@
  			if (type == 0) {
  				netID = 0;
  				stack = 0;
-@@ -44387,6 +_,11 @@
+@@ -44387,7 +_,12 @@
  				SetDefaults5(type);
  			}
  
@@ -325,9 +353,11 @@
 +				master = true;
 +			}
 +
- 			dye = (byte)GameShaders.Armor.GetShaderIdFromItemId(type);
+-			dye = (byte)GameShaders.Armor.GetShaderIdFromItemId(type);
++			dye = GameShaders.Armor.GetShaderIdFromItemId(type);
  			if (hairDye != 0)
  				hairDye = GameShaders.Hair.GetShaderIdFromItemId(type);
+ 
 @@ -44536,11 +_,12 @@
  				maxStack = 999;
  
@@ -487,3 +517,12 @@
  		}
  
  		public void OnPurchase(Item item) {
+@@ -45829,7 +_,7 @@
+ 			if (context == ItemSerializationContext.SavingAndLoading) {
+ 				writer.Write(netID);
+ 				writer.Write(stack);
+-				writer.Write(prefix);
++				ItemIO.WriteVanillaPrefix(this, writer);
+ 			}
+ 		}
+ 

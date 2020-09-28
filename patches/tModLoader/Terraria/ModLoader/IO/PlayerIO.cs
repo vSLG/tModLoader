@@ -14,7 +14,7 @@ namespace Terraria.ModLoader.IO
 {
 	internal static class PlayerIO
 	{
-		internal static void WriteVanillaHairDye(short hairDye, BinaryWriter writer) {
+		internal static void WriteVanillaHairDye(int hairDye, BinaryWriter writer) {
 			writer.Write((byte)(hairDye > EffectsTracker.vanillaHairShaderCount ? 0 : hairDye));
 		}
 
@@ -92,7 +92,7 @@ namespace Terraria.ModLoader.IO
 				inv[tag.GetShort("slot")] = ItemIO.Load(tag);
 		}
 
-		public static string SaveHairDye(short hairDye) {
+		public static string SaveHairDye(int hairDye) {
 			if (hairDye <= EffectsTracker.vanillaHairShaderCount)
 				return "";
 
@@ -107,7 +107,7 @@ namespace Terraria.ModLoader.IO
 
 			// no mystery hair dye at this stage
 			if (ModContent.TryFind<ModItem>(hairDyeItemName, out var modItem))
-				player.hairDye = (byte)GameShaders.Hair.GetShaderIdFromItemId(modItem.Type);
+				player.hairDye = GameShaders.Hair.GetShaderIdFromItemId(modItem.Type);
 		}
 
 		internal static List<TagCompound> SaveModData(Player player) {

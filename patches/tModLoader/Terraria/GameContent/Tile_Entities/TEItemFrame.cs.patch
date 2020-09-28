@@ -7,12 +7,14 @@
  
  namespace Terraria.GameContent.Tile_Entities
  {
-@@ -71,7 +_,7 @@
+@@ -71,8 +_,8 @@
  		}
  
  		public override void WriteExtraData(BinaryWriter writer, bool networkSend) {
 -			writer.Write((short)item.netID);
+-			writer.Write(item.prefix);
 +			writer.Write((short)(item.netID >= ItemID.Count ? 0 : item.netID));
- 			writer.Write(item.prefix);
++			ModLoader.IO.ItemIO.WriteVanillaPrefix(item, writer);
  			writer.Write((short)item.stack);
  		}
+ 

@@ -1,0 +1,11 @@
+--- src/Terraria/Terraria/GameContent/Tile_Entities/TEFoodPlatter.cs
++++ src/tModLoader/Terraria/GameContent/Tile_Entities/TEFoodPlatter.cs
+@@ -73,7 +_,7 @@
+ 
+ 		public override void WriteExtraData(BinaryWriter writer, bool networkSend) {
+ 			writer.Write((short)item.netID);
+-			writer.Write(item.prefix);
++			ModLoader.IO.ItemIO.WriteVanillaPrefix(item, writer);
+ 			writer.Write((short)item.stack);
+ 		}
+ 
