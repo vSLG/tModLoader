@@ -13,6 +13,13 @@ namespace Terraria
 
 		// Get
 
+		/// <summary> Returns an enumerable of all global items present on this item. </summary>
+		public IEnumerable<ModPlayer> GetModPlayers() {
+			for (int i = 0; i < modPlayers.Length; i++) {
+				yield return modPlayers[i];
+			}
+		}
+
 		/// <summary> Gets the instance of the specified ModPlayer type. This will throw exceptions on failure. </summary>
 		/// <exception cref="KeyNotFoundException"/>
 		/// <exception cref="IndexOutOfRangeException"/>

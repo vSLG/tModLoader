@@ -20,6 +20,13 @@ namespace Terraria
 
 		// Get
 
+		/// <summary> Returns an enumerable of all GlobalNPCs present on this npc. </summary>
+		public IEnumerable<GlobalNPC> GetGlobalItems() {
+			for (int i = 0; i < globalNPCs.Length; i++) {
+				yield return globalNPCs[i].instance;
+			}
+		}
+
 		/// <summary> Gets the instance of the specified GlobalNPC type. This will throw exceptions on failure. </summary>
 		/// <exception cref="KeyNotFoundException"/>
 		/// <exception cref="IndexOutOfRangeException"/>

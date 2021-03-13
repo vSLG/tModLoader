@@ -19,6 +19,13 @@ namespace Terraria
 			set => _damageClass = value ?? throw new ArgumentException("DamageType cannot be null");
 		}
 
+		/// <summary> Returns an enumerable of all global items present on this item. </summary>
+		public IEnumerable<GlobalProjectile> GetGlobalProjectiles() {
+			for (int i = 0; i < globalProjectiles.Length; i++) {
+				yield return globalProjectiles[i].instance;
+			}
+		}
+
 		/// <summary> Gets the instance of the specified GlobalProjectile type. This will throw exceptions on failure. </summary>
 		/// <exception cref="KeyNotFoundException"/>
 		/// <exception cref="IndexOutOfRangeException"/>
