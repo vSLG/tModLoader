@@ -38,8 +38,10 @@ namespace Terraria.ModLoader
 		private static readonly List<HookList> modHooks = new List<HookList>();
 
 		private static HookList AddHook<F>(Expression<Func<GlobalItem, F>> func) {
-			var hook = new HookList(ModLoader.Method(func));
+			return AddHook(new HookList(ModLoader.Method(func)));
+		}
 
+		private static T AddHook<T>(T hook) where T : HookList<GlobalItem> {
 			hooks.Add(hook);
 
 			return hook;
