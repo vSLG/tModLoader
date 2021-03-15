@@ -601,7 +601,7 @@
  				int num4 = item.stack = Main.rand.Next(minValue2, num3 + 1);
  			}
  
-+			ItemLoader.CaughtFishStack(item);
++			ItemLoader.CaughtFishStack.Invoke(item);
  			item.newAndShiny = true;
  			Item item2 = thePlayer.GetItem(owner, item, default(GetItemSettings));
  			if (item2.stack > 0) {

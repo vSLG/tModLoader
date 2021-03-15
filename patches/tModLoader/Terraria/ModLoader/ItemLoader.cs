@@ -69,7 +69,8 @@ namespace Terraria.ModLoader
 		}
 
 		internal static int ReserveItemID() {
-			if (ModNet.AllowVanillaClients) throw new Exception("Adding items breaks vanilla client compatibility");
+			if (ModNet.AllowVanillaClients)
+				throw new Exception("Adding items breaks vanilla client compatibility");
 
 			int reserveID = nextItem;
 			nextItem++;
@@ -171,18 +172,21 @@ namespace Terraria.ModLoader
 			}
 		}
 
-		private static HookList HookOnCreate = AddHook<Action<Item, ItemCreationContext>>(g => g.OnCreate);
-		public static void OnCreate(Item item, ItemCreationContext context) {
-			foreach (var g in HookOnCreate.Enumerate(item.globalItems)) {
-				g.OnCreate(item, context);
-			}
+		public static readonly HookList<GlobalItem, Action<Item, ItemCreationContext>> OnCreate = AddHook(
+			new HookList<GlobalItem, Action<Item, ItemCreationContext>>(
+				//Method reference
+				g => g.OnCreate,
+				//Invocation
+				e => (Item item, ItemCreationContext context) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnCreate(item, context);
+					}
 
-			item.ModItem?.OnCreate(context);
-		}
-		
-		//near end of Terraria.Main.DrawItem before default drawing call
-		//  if(ItemLoader.animations.Contains(item.type))
-		//  { ItemLoader.DrawAnimatedItem(item, whoAmI, color, alpha, rotation, scale); return; }
+					item.ModItem?.OnCreate(context);
+				}
+			)
+		);
+
 		internal static void DrawAnimatedItem(Item item, int whoAmI, Color color, Color alpha, float rotation, float scale) {
 			int frameCount = Main.itemAnimations[item.type].FrameCount;
 			int frameDuration = Main.itemAnimations[item.type].TicksPerFrame;
@@ -203,9 +207,9 @@ namespace Terraria.ModLoader
 			Rectangle frame = texture.Frame(1, frameCount, 0, Main.itemFrame[whoAmI]);
 			float offX = item.width * 0.5f - frame.Width * 0.5f;
 			float offY = item.height - frame.Height;
-			
+
 			Main.spriteBatch.Draw(texture, new Vector2(item.position.X - Main.screenPosition.X + frame.Width / 2 + offX, item.position.Y - Main.screenPosition.Y + frame.Height / 2 + offY), new Rectangle?(frame), alpha, rotation, frame.Size() / 2f, scale, SpriteEffects.None, 0f);
-			
+
 			if (item.color != default) {
 				Main.spriteBatch.Draw(texture, new Vector2(item.position.X - Main.screenPosition.X + frame.Width / 2 + offX, item.position.Y - Main.screenPosition.Y + frame.Height / 2 + offY), new Rectangle?(frame), item.GetColor(color), rotation, frame.Size() / 2f, scale, SpriteEffects.None, 0f);
 			}
@@ -218,296 +222,408 @@ namespace Terraria.ModLoader
 			return Main.itemAnimations[item.type].GetFrame(TextureAssets.Item[item.type].Value);
 		}
 
-		private static HookList HookChoosePrefix = AddHook<Func<Item, UnifiedRandom, int>>(g => g.ChoosePrefix);
+		public static readonly HookList<GlobalItem, Func<Item, UnifiedRandom, int>> ChoosePrefix = AddHook(
+			new HookList<GlobalItem, Func<Item, UnifiedRandom, int>>(
+				//Method reference
+				g => g.ChoosePrefix,
+				//Invocation
+				e => (Item item, UnifiedRandom rand) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						int pre = g.ChoosePrefix(item, rand);
 
-		public static int ChoosePrefix(Item item, UnifiedRandom rand) {
-			foreach (var g in HookChoosePrefix.Enumerate(item.globalItems)) {
-				int pre = g.ChoosePrefix(item, rand);
-				if (pre > 0) {
-					return pre;
+						if (pre > 0)
+							return pre;
+					}
+
+					if (item.ModItem != null) {
+						int pre = item.ModItem.ChoosePrefix(rand);
+
+						if (pre > 0)
+							return pre;
+					}
+
+					return -1;
 				}
-			}
-			if (item.ModItem != null) {
-				int pre = item.ModItem.ChoosePrefix(rand);
-				if (pre > 0) {
-					return pre;
+			)
+		);
+
+		public static readonly HookList<GlobalItem, Func<Item, int, UnifiedRandom, bool?>> PrefixChance = AddHook(
+			new HookList<GlobalItem, Func<Item, int, UnifiedRandom, bool?>>(
+				//Method reference
+				g => g.PrefixChance,
+				//Invocation
+				e => (Item item, int pre, UnifiedRandom rand) => {
+					bool? result = null;
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						bool? r = g.PrefixChance(item, pre, rand);
+
+						if (r.HasValue)
+							result = r.Value && (result ?? true);
+					}
+
+					if (item.ModItem != null) {
+						bool? r = item.ModItem.PrefixChance(pre, rand);
+
+						if (r.HasValue)
+							result = r.Value && (result ?? true);
+					}
+
+					return result;
 				}
-			}
-			return -1;
-		}
+			)
+		);
 
-		private static HookList HookPrefixChance = AddHook<Func<Item, int, UnifiedRandom, bool?>>(g => g.PrefixChance);
+		public static readonly HookList<GlobalItem, Func<Item, int, bool>> AllowPrefix = AddHook(
+			new HookList<GlobalItem, Func<Item, int, bool>>(
+				//Method reference
+				g => g.AllowPrefix,
+				//Invocation
+				e => (Item item, int pre) => {
+					bool result = true;
 
-		/// <summary>
-		/// Allows for blocking, forcing and altering chance of prefix rolling.
-		/// False (block) takes precedence over True (force).
-		/// Null gives vanilla behaviour
-		/// </summary>
-		public static bool? PrefixChance(Item item, int pre, UnifiedRandom rand) {
-			bool? result = null;
-			foreach (var g in HookPrefixChance.Enumerate(item.globalItems)) {
-				bool? r = g.PrefixChance(item, pre, rand);
-				if (r.HasValue)
-					result = r.Value && (result ?? true);
-			}
-			if (item.ModItem != null) {
-				bool? r = item.ModItem.PrefixChance(pre, rand);
-				if (r.HasValue)
-					result = r.Value && (result ?? true);
-			}
-			return result;
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						result &= g.AllowPrefix(item, pre);
+					}
 
-		private static HookList HookAllowPrefix = AddHook<Func<Item, int, bool>>(g => g.AllowPrefix);
-		public static bool AllowPrefix(Item item, int pre) {
-			bool result = true;
-			foreach (var g in HookAllowPrefix.Enumerate(item.globalItems)) {
-				result &= g.AllowPrefix(item, pre);
-			}
-			if (item.ModItem != null) {
-				result &= item.ModItem.AllowPrefix(pre);
-			}
-			return result;
-		}
+					if (item.ModItem != null)
+						result &= item.ModItem.AllowPrefix(pre);
 
-		private static HookList HookCanUseItem = AddHook<Func<Item, Player, bool>>(g => g.CanUseItem);
-		//in Terraria.Player.ItemCheck
-		//  inside block if (this.controlUseItem && this.itemAnimation == 0 && this.releaseUseItem && item.useStyle > 0)
-		//  set initial flag2 to ItemLoader.CanUseItem(item, this)
+					return result;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Returns the "and" operation on the results of ModItem.CanUseItem and all GlobalItem.CanUseItem hooks.
 		/// Does not fail fast (every hook is called).
 		/// </summary>
 		/// <param name="item">The item.</param>
 		/// <param name="player">The player holding the item.</param>
-		public static bool CanUseItem(Item item, Player player) {
-			bool flag = true;
-			if (item.ModItem != null)
-				flag &= item.ModItem.CanUseItem(player);
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> CanUseItem = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.CanUseItem,
+				//Invocation
+				e => (Item item, Player player) => {
+					bool flag = true;
 
-			foreach (var g in HookCanUseItem.Enumerate(item.globalItems)) {
-				flag &= g.CanUseItem(item, player);
-			}
+					if (item.ModItem != null)
+						flag &= item.ModItem.CanUseItem(player);
 
-			return flag;
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						flag &= g.CanUseItem(item, player);
+					}
 
-		private static HookList HookUseStyle = AddHook<Action<Item, Player, Rectangle>>(g => g.UseStyle);
-		//in Terraria.Player.ItemCheck after useStyle if/else chain call ItemLoader.UseStyle(item, this)
+					return flag;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.UseStyle and all GlobalItem.UseStyle hooks.
 		/// </summary>
-		public static void UseStyle(Item item, Player player, Rectangle heldItemFrame) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player, Rectangle>> UseStyle = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, Rectangle>>(
+				//Method reference
+				g => g.UseStyle,
+				//Invocation
+				e => (Item item, Player player, Rectangle heldItemFrame) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UseStyle(player, heldItemFrame);
+					item.ModItem?.UseStyle(player, heldItemFrame);
 
-			foreach (var g in HookUseStyle.Enumerate(item.globalItems)) {
-				g.UseStyle(item, player, heldItemFrame);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UseStyle(item, player, heldItemFrame);
+					}
+				}
+			)
+		);
 
-		private static HookList HookHoldStyle = AddHook<Action<Item, Player, Rectangle>>(g => g.HoldStyle);
-		//in Terraria.Player.ItemCheck after holdStyle if/else chain call ItemLoader.HoldStyle(item, this)
 		/// <summary>
 		/// If the player is not holding onto a rope and is not in the middle of using an item, calls ModItem.HoldStyle and all GlobalItem.HoldStyle hooks.
 		/// <br/> Returns whether or not the vanilla logic should be skipped.
 		/// </summary>
-		public static void HoldStyle(Item item, Player player, Rectangle heldItemFrame) {
-			if (item.IsAir || player.pulley || player.itemAnimation > 0)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player, Rectangle>> HoldStyle = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, Rectangle>>(
+				//Method reference
+				g => g.HoldStyle,
+				//Invocation
+				e => (Item item, Player player, Rectangle heldItemFrame) => {
+					if (item.IsAir || player.pulley || player.itemAnimation > 0)
+						return;
 
-			item.ModItem?.HoldStyle(player, heldItemFrame);
+					item.ModItem?.HoldStyle(player, heldItemFrame);
 
-			foreach (var g in HookHoldStyle.Enumerate(item.globalItems)) {
-				g.HoldStyle(item, player, heldItemFrame);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.HoldStyle(item, player, heldItemFrame);
+					}
+				}
+			)
+		);
 
-		private static HookList HookHoldItem = AddHook<Action<Item, Player>>(g => g.HoldItem);
-		//in Terraria.Player.ItemCheck before this.controlUseItem setting this.releaseUseItem call ItemLoader.HoldItem(item, this)
 		/// <summary>
 		/// Calls ModItem.HoldItem and all GlobalItem.HoldItem hooks.
 		/// </summary>
-		public static void HoldItem(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> HoldItem = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.HoldItem,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.HoldItem(player);
+					item.ModItem?.HoldItem(player);
 
-			foreach (var g in HookHoldItem.Enumerate(item.globalItems)) {
-				g.HoldItem(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.HoldItem(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUseTimeMultiplier = AddHook<Func<Item, Player, float>>(g => g.UseTimeMultiplier);
-		public static float UseTimeMultiplier(Item item, Player player) {
-			if (item.IsAir)
-				return 1f;
+		public static readonly HookList<GlobalItem, Func<Item, Player, float>> UseTimeMultiplier = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, float>>(
+				//Method reference
+				g => g.UseTimeMultiplier,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return 1f;
 
-			float multiplier = item.ModItem?.UseTimeMultiplier(player) ?? 1f;
+					float multiplier = item.ModItem?.UseTimeMultiplier(player) ?? 1f;
 
-			foreach (var g in HookUseTimeMultiplier.Enumerate(item.globalItems)) {
-				multiplier *= g.UseTimeMultiplier(item, player);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						multiplier *= g.UseTimeMultiplier(item, player);
+					}
 
-			return multiplier;
-		}
+					return multiplier;
+				}
+			)
+		);
 
-		private static HookList HookMeleeSpeedMultiplier = AddHook<Func<Item, Player, float>>(g => g.MeleeSpeedMultiplier);
-		public static float MeleeSpeedMultiplier(Item item, Player player) {
-			if (item.IsAir)
-				return 1f;
+		public static readonly HookList<GlobalItem, Func<Item, Player, float>> MeleeSpeedMultiplier = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, float>>(
+				//Method reference
+				g => g.MeleeSpeedMultiplier,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return 1f;
 
-			float multiplier = item.ModItem?.MeleeSpeedMultiplier(player) ?? 1f;
+					float multiplier = item.ModItem?.MeleeSpeedMultiplier(player) ?? 1f;
 
-			foreach (var g in HookMeleeSpeedMultiplier.Enumerate(item.globalItems)) {
-				multiplier *= g.MeleeSpeedMultiplier(item, player);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						multiplier *= g.MeleeSpeedMultiplier(item, player);
+					}
 
-			return multiplier;
-		}
+					return multiplier;
+				}
+			)
+		);
 
-		private delegate void DelegateGetHealLife(Item item, Player player, bool quickHeal, ref int healValue);
-		private static HookList HookGetHealLife = AddHook<DelegateGetHealLife>(g => g.GetHealLife);
+		public delegate void DelegateGetHealLife(Item item, Player player, bool quickHeal, ref int healValue);
+
 		/// <summary>
 		/// Calls ModItem.GetHealLife, then all GlobalItem.GetHealLife hooks.
 		/// </summary>
-		public static void GetHealLife(Item item, Player player, bool quickHeal, ref int healValue) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, DelegateGetHealLife> GetHealLife = AddHook(
+			new HookList<GlobalItem, DelegateGetHealLife>(
+				//Method reference
+				g => g.GetHealLife,
+				//Invocation
+				e => (Item item, Player player, bool quickHeal, ref int healValue) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.GetHealLife(player, quickHeal, ref healValue);
+					item.ModItem?.GetHealLife(player, quickHeal, ref healValue);
 
-			foreach (var g in HookGetHealLife.Enumerate(item.globalItems)) {
-				g.GetHealLife(item, player, quickHeal, ref healValue);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.GetHealLife(item, player, quickHeal, ref healValue);
+					}
+				}
+			)
+		);
 
-		private delegate void DelegateGetHealMana(Item item, Player player, bool quickHeal, ref int healValue);
-		private static HookList HookGetHealMana = AddHook<DelegateGetHealMana>(g => g.GetHealMana);
+		public delegate void DelegateGetHealMana(Item item, Player player, bool quickHeal, ref int healValue);
+
 		/// <summary>
 		/// Calls ModItem.GetHealMana, then all GlobalItem.GetHealMana hooks.
 		/// </summary>
-		public static void GetHealMana(Item item, Player player, bool quickHeal, ref int healValue) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, DelegateGetHealMana> GetHealMana = AddHook(
+			new HookList<GlobalItem, DelegateGetHealMana>(
+				//Method reference
+				g => g.GetHealMana,
+				//Invocation
+				e => (Item item, Player player, bool quickHeal, ref int healValue) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.GetHealMana(player, quickHeal, ref healValue);
+					item.ModItem?.GetHealMana(player, quickHeal, ref healValue);
 
-			foreach (var g in HookGetHealMana.Enumerate(item.globalItems)) {
-				g.GetHealMana(item, player, quickHeal, ref healValue);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.GetHealMana(item, player, quickHeal, ref healValue);
+					}
+				}
+			)
+		);
 
-		private delegate void DelegateModifyManaCost(Item item, Player player, ref float reduce, ref float mult);
-		private static HookList HookModifyManaCost = AddHook<DelegateModifyManaCost>(g => g.ModifyManaCost);
+		public delegate void DelegateModifyManaCost(Item item, Player player, ref float reduce, ref float mult);
+
 		/// <summary>
 		/// Calls ModItem.ModifyManaCost, then all GlobalItem.ModifyManaCost hooks.
 		/// </summary>
-		public static void ModifyManaCost(Item item, Player player, ref float reduce, ref float mult) {
-			if (item.IsAir)
-				return;
-			
-			item.ModItem?.ModifyManaCost(player, ref reduce, ref mult);
+		public static readonly HookList<GlobalItem, DelegateModifyManaCost> ModifyManaCost = AddHook(
+			new HookList<GlobalItem, DelegateModifyManaCost>(
+				//Method reference
+				g => g.ModifyManaCost,
+				//Invocation
+				e => (Item item, Player player, ref float reduce, ref float mult) => {
+					if (item.IsAir)
+						return;
 
-			foreach (var g in HookModifyManaCost.Enumerate(item.globalItems)) {
-				g.ModifyManaCost(item, player, ref reduce, ref mult);
-			}
-		}
+					item.ModItem?.ModifyManaCost(player, ref reduce, ref mult);
 
-		private static HookList HookOnMissingMana = AddHook<Action<Item, Player, int>>(g => g.OnMissingMana);
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyManaCost(item, player, ref reduce, ref mult);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.OnMissingMana, then all GlobalItem.OnMissingMana hooks.
 		/// </summary>
-		public static void OnMissingMana(Item item, Player player, int neededMana) {
-			if (item.IsAir)
-				return;
-			
-			item.ModItem?.OnMissingMana(player, neededMana);
+		public static readonly HookList<GlobalItem, Action<Item, Player, int>> OnMissingMana = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, int>>(
+				//Method reference
+				g => g.OnMissingMana,
+				//Invocation
+				e => (Item item, Player player, int neededMana) => {
+					if (item.IsAir)
+						return;
 
-			foreach (var g in HookOnMissingMana.Enumerate(item.globalItems)) {
-				g.OnMissingMana(item, player, neededMana);
-			}
-		}
+					item.ModItem?.OnMissingMana(player, neededMana);
 
-		private static HookList HookOnConsumeMana = AddHook<Action<Item, Player, int>>(g => g.OnConsumeMana);
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnMissingMana(item, player, neededMana);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.OnConsumeMana, then all GlobalItem.OnConsumeMana hooks.
 		/// </summary>
-		public static void OnConsumeMana(Item item, Player player, int manaConsumed) {
-			if (item.IsAir)
-				return;
-			
-			item.ModItem?.OnConsumeMana(player, manaConsumed);
+		public static readonly HookList<GlobalItem, Action<Item, Player, int>> OnConsumeMana = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, int>>(
+				//Method reference
+				g => g.OnConsumeMana,
+				//Invocation
+				e => (Item item, Player player, int manaConsumed) => {
+					if (item.IsAir)
+						return;
 
-			foreach (var g in HookOnConsumeMana.Enumerate(item.globalItems)) {
-				g.OnConsumeMana(item, player, manaConsumed);
-			}
-		}
+					item.ModItem?.OnConsumeMana(player, manaConsumed);
 
-		private delegate void DelegateModifyResearchSorting(Item item, ref ContentSamples.CreativeHelper.ItemGroup itemGroup);
-		private static HookList HookModifyResearchSorting = AddHook<DelegateModifyResearchSorting>(g => g.ModifyResearchSorting);
-		public static void ModifyResearchSorting(Item item, ref ContentSamples.CreativeHelper.ItemGroup itemGroup) {
-			if (item.IsAir)
-				return;
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnConsumeMana(item, player, manaConsumed);
+					}
+				}
+			)
+		);
 
-			item.ModItem?.ModifyResearchSorting(ref itemGroup);
+		public delegate void DelegateModifyResearchSorting(Item item, ref ContentSamples.CreativeHelper.ItemGroup itemGroup);
 
-			foreach (var g in HookModifyResearchSorting.Enumerate(item.globalItems)) {
-				g.ModifyResearchSorting(item, ref itemGroup);
-			}
-		}
+		public static readonly HookList<GlobalItem, DelegateModifyResearchSorting> ModifyResearchSorting = AddHook(
+			new HookList<GlobalItem, DelegateModifyResearchSorting>(
+				//Method reference
+				g => g.ModifyResearchSorting,
+				//Invocation
+				e => (Item item, ref ContentSamples.CreativeHelper.ItemGroup itemGroup) => {
+					if (item.IsAir)
+						return;
 
-		private delegate void DelegateModifyWeaponDamage(Item item, Player player, ref StatModifier damage, ref float flat);
-		private static HookList HookModifyWeaponDamage = AddHook<DelegateModifyWeaponDamage>(g => g.ModifyWeaponDamage);
+					item.ModItem?.ModifyResearchSorting(ref itemGroup);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyResearchSorting(item, ref itemGroup);
+					}
+				}
+			)
+		);
+
+		public delegate void DelegateModifyWeaponDamage(Item item, Player player, ref StatModifier damage, ref float flat);
+
 		/// <summary>
 		/// Calls ModItem.HookModifyWeaponDamage, then all GlobalItem.HookModifyWeaponDamage hooks.
 		/// </summary>
-		public static void ModifyWeaponDamage(Item item, Player player, ref StatModifier damage, ref float flat) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, DelegateModifyWeaponDamage> ModifyWeaponDamage = AddHook(
+			new HookList<GlobalItem, DelegateModifyWeaponDamage>(
+				//Method reference
+				g => g.ModifyWeaponDamage,
+				//Invocation
+				e => (Item item, Player player, ref StatModifier damage, ref float flat) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.ModifyWeaponDamage(player, ref damage, ref flat);
+					item.ModItem?.ModifyWeaponDamage(player, ref damage, ref flat);
 
-			foreach (var g in HookModifyWeaponDamage.Enumerate(item.globalItems)) {
-				g.ModifyWeaponDamage(item, player, ref damage, ref flat);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyWeaponDamage(item, player, ref damage, ref flat);
+					}
+				}
+			)
+		);
 
-		private delegate void DelegateModifyWeaponKnockback(Item item, Player player, ref StatModifier knockback, ref float flat);
-		private static HookList HookModifyWeaponKnockback = AddHook<DelegateModifyWeaponKnockback>(g => g.ModifyWeaponKnockback);
+		public delegate void DelegateModifyWeaponKnockback(Item item, Player player, ref StatModifier knockback, ref float flat);
+
 		/// <summary>
 		/// Calls ModItem.ModifyWeaponKnockback, then all GlobalItem.ModifyWeaponKnockback hooks.
 		/// </summary>
-		public static void ModifyWeaponKnockback(Item item, Player player, ref StatModifier knockback, ref float flat) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, DelegateModifyWeaponKnockback> ModifyWeaponKnockback = AddHook(
+			new HookList<GlobalItem, DelegateModifyWeaponKnockback>(
+				//Method reference
+				g => g.ModifyWeaponKnockback,
+				//Invocation
+				e => (Item item, Player player, ref StatModifier knockback, ref float flat) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.ModifyWeaponKnockback(player, ref knockback, ref flat);
+					item.ModItem?.ModifyWeaponKnockback(player, ref knockback, ref flat);
 
-			foreach (var g in HookModifyWeaponKnockback.Enumerate(item.globalItems)) {
-				g.ModifyWeaponKnockback(item, player, ref knockback, ref flat);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyWeaponKnockback(item, player, ref knockback, ref flat);
+					}
+				}
+			)
+		);
 
 
-		private delegate void DelegateModifyWeaponCrit(Item item, Player player, ref int crit);
-		private static HookList HookModifyWeaponCrit = AddHook<DelegateModifyWeaponCrit>(g => g.ModifyWeaponCrit);
+		public delegate void DelegateModifyWeaponCrit(Item item, Player player, ref int crit);
+
 		/// <summary>
 		/// Calls ModItem.ModifyWeaponCrit, then all GlobalItem.ModifyWeaponCrit hooks.
 		/// </summary>
-		public static void ModifyWeaponCrit(Item item, Player player, ref int crit) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, DelegateModifyWeaponCrit> ModifyWeaponCrit = AddHook(
+			new HookList<GlobalItem, DelegateModifyWeaponCrit>(
+				//Method reference
+				g => g.ModifyWeaponCrit,
+				//Invocation
+				e => (Item item, Player player, ref int crit) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.ModifyWeaponCrit(player, ref crit);
+					item.ModItem?.ModifyWeaponCrit(player, ref crit);
 
-			foreach (var g in HookModifyWeaponCrit.Enumerate(item.globalItems)) {
-				g.ModifyWeaponCrit(item, player, ref crit);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyWeaponCrit(item, player, ref crit);
+					}
+				}
+			)
+		);
 
 		/// <summary>
 		/// If the item is a modded item, ModItem.checkProjOnSwing is true, and the player is not at the beginning of the item's use animation, sets canShoot to false.
@@ -516,63 +632,76 @@ namespace Terraria.ModLoader
 			return item.ModItem == null || !item.ModItem.OnlyShootOnSwing || player.itemAnimation == player.itemAnimationMax - 1;
 		}
 
-		private delegate void DelegatePickAmmo(Item weapon, Item ammo, Player player, ref int type, ref float speed, ref int damage, ref float knockback);
-		private static HookList HookPickAmmo = AddHook<DelegatePickAmmo>(g => g.PickAmmo);
+		public delegate void DelegatePickAmmo(Item weapon, Item ammo, Player player, ref int type, ref float speed, ref int damage, ref float knockback);
 		/// <summary>
 		/// Calls ModItem.PickAmmo, then all GlobalItem.PickAmmo hooks.
 		/// </summary>
-		public static void PickAmmo(Item weapon, Item ammo, Player player, ref int type, ref float speed, ref int damage, ref float knockback) {
-			ammo.ModItem?.PickAmmo(weapon, player, ref type, ref speed, ref damage, ref knockback);
+		public static readonly HookList<GlobalItem, DelegatePickAmmo> PickAmmo = AddHook(
+			new HookList<GlobalItem, DelegatePickAmmo>(
+				//Method reference
+				g => g.PickAmmo,
+				//Invocation
+				e => (Item weapon, Item ammo, Player player, ref int type, ref float speed, ref int damage, ref float knockback) => {
+					ammo.ModItem?.PickAmmo(weapon, player, ref type, ref speed, ref damage, ref knockback);
 
-			foreach (var g in HookPickAmmo.Enumerate(ammo.globalItems)) {
-				g.PickAmmo(weapon, ammo, player, ref type, ref speed, ref damage, ref knockback);
-			}
-		}
+					foreach (var g in e.Enumerate(ammo.globalItems)) {
+						g.PickAmmo(weapon, ammo, player, ref type, ref speed, ref damage, ref knockback);
+					}
+				}
+			)
+		);
 
-		private static HookList HookConsumeAmmo = AddHook<Func<Item, Player, bool>>(g => g.ConsumeAmmo);
-		//near end of Terraria.Player.PickAmmo before flag2 is checked add
-		//  if(!ItemLoader.ConsumeAmmo(sItem, item, this)) { flag2 = true; }
 		/// <summary>
 		/// Calls ModItem.ConsumeAmmo for the weapon, ModItem.ConsumeAmmo for the ammo, then each GlobalItem.ConsumeAmmo hook for the weapon and ammo, until one of them returns false. If all of them return true, returns true.
 		/// </summary>
-		public static bool ConsumeAmmo(Item item, Item ammo, Player player) {
-			if (item.ModItem != null && !item.ModItem.ConsumeAmmo(player) ||
-					ammo.ModItem != null && !ammo.ModItem.ConsumeAmmo(player))
-				return false;
+		public static readonly HookList<GlobalItem, Func<Item, Item, Player, bool>> ConsumeAmmo = AddHook(
+			new HookList<GlobalItem, Func<Item, Item, Player, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.ConsumeAmmo)),
+				//Invocation
+				e => (Item item, Item ammo, Player player) => {
+					if (item.ModItem != null && !item.ModItem.ConsumeAmmo(player)
+					|| ammo.ModItem != null && !ammo.ModItem.ConsumeAmmo(player))
+						return false;
 
-			foreach (var g in HookConsumeAmmo.Enumerate(ammo.globalItems)) {
-				if (!g.ConsumeAmmo(item, player) ||
-					!g.ConsumeAmmo(ammo, player))
-					return false;
-			}
+					foreach (var g in e.Enumerate(ammo.globalItems)) {
+						if (!g.ConsumeAmmo(item, player) || !g.ConsumeAmmo(ammo, player))
+							return false;
+					}
 
-			return true;
-		}
+					return true;
+				}
+			)
+		);
 
-		private static HookList HookOnConsumeAmmo = AddHook<Action<Item, Player>>(g => g.OnConsumeAmmo);
 		/// <summary>
 		/// Calls ModItem.OnConsumeAmmo for the weapon, ModItem.OnConsumeAmmo for the ammo, then each GlobalItem.OnConsumeAmmo hook for the weapon and ammo.
 		/// </summary>
-		public static void OnConsumeAmmo(Item item, Item ammo, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Item, Player>> OnConsumeAmmo = AddHook(
+			new HookList<GlobalItem, Action<Item, Item, Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.OnConsumeAmmo)),
+				//Invocation
+				e => (Item item, Item ammo, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.OnConsumeAmmo(player);
-			ammo.ModItem?.OnConsumeAmmo(player);
+					item.ModItem?.OnConsumeAmmo(player);
+					ammo.ModItem?.OnConsumeAmmo(player);
 
-			foreach (var g in HookOnConsumeAmmo.Enumerate(item.globalItems)) {
-				g.OnConsumeAmmo(item, player);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnConsumeAmmo(item, player);
+					}
 
-			foreach (var g in HookOnConsumeAmmo.Enumerate(ammo.globalItems)) {
-				g.OnConsumeAmmo(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(ammo.globalItems)) {
+						g.OnConsumeAmmo(item, player);
+					}
+				}
+			)
+		);
 
-		private delegate bool DelegateShoot(Item item, Player player, ref Vector2 position, ref float speedX, ref float speedY, ref int type, ref int damage, ref float knockBack);
-		private static HookList HookShoot = AddHook<DelegateShoot>(g => g.Shoot);
-		//in Terraria.Player.ItemCheck at end of if/else chain for shooting place if on last else
-		//  if(ItemLoader.Shoot(item, this, ref vector2, ref num78, ref num79, ref num71, ref num73, ref num74))
+		public delegate bool DelegateShoot(Item item, Player player, ref Vector2 position, ref float speedX, ref float speedY, ref int type, ref int damage, ref float knockBack);
+
 		/// <summary>
 		/// Calls each GlobalItem.Shoot hook, then ModItem.Shoot, until one of them returns false. If all of them return true, returns true.
 		/// </summary>
@@ -585,467 +714,597 @@ namespace Terraria.ModLoader
 		/// <param name="damage">The projectile damage.</param>
 		/// <param name="knockBack">The projectile knock back.</param>
 		/// <returns></returns>
-		public static bool Shoot(Item item, Player player, ref Vector2 position, ref float speedX, ref float speedY, ref int type, ref int damage, ref float knockBack) {
-			bool result = true;
+		public static readonly HookList<GlobalItem, DelegateShoot> Shoot = AddHook(
+			new HookList<GlobalItem, DelegateShoot>(
+				//Method reference
+				g => g.Shoot,
+				//Invocation
+				e => (Item item, Player player, ref Vector2 position, ref float speedX, ref float speedY, ref int type, ref int damage, ref float knockBack) => {
+					bool result = true;
 
-			foreach (var g in HookShoot.Enumerate(item.globalItems)) {
-				result &= g.Shoot(item, player, ref position, ref speedX, ref speedY, ref type, ref damage, ref knockBack);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						result &= g.Shoot(item, player, ref position, ref speedX, ref speedY, ref type, ref damage, ref knockBack);
+					}
 
-			if (result && item.ModItem != null) {
-				return item.ModItem.Shoot(player, ref position, ref speedX, ref speedY, ref type, ref damage, ref knockBack);
-			}
+					if (result && item.ModItem != null)
+						return item.ModItem.Shoot(player, ref position, ref speedX, ref speedY, ref type, ref damage, ref knockBack);
 
-			return result;
-		}
+					return result;
+				}
+			)
+		);
 
-		private delegate void DelegateUseItemHitbox(Item item, Player player, ref Rectangle hitbox, ref bool noHitbox);
-		private static HookList HookUseItemHitbox = AddHook<DelegateUseItemHitbox>(g => g.UseItemHitbox);
-		//in Terraria.Player.ItemCheck after end of useStyle if/else chain for melee hitbox
-		//  call ItemLoader.UseItemHitbox(item, this, ref r2, ref flag17)
+		public delegate void DelegateUseItemHitbox(Item item, Player player, ref Rectangle hitbox, ref bool noHitbox);
+
 		/// <summary>
 		/// Calls ModItem.UseItemHitbox, then all GlobalItem.UseItemHitbox hooks.
 		/// </summary>
-		public static void UseItemHitbox(Item item, Player player, ref Rectangle hitbox, ref bool noHitbox) {
-			item.ModItem?.UseItemHitbox(player, ref hitbox, ref noHitbox);
+		public static readonly HookList<GlobalItem, DelegateUseItemHitbox> UseItemHitbox = AddHook(
+			new HookList<GlobalItem, DelegateUseItemHitbox>(
+				//Method reference
+				g => g.UseItemHitbox,
+				//Invocation
+				e => (Item item, Player player, ref Rectangle hitbox, ref bool noHitbox) => {
+					item.ModItem?.UseItemHitbox(player, ref hitbox, ref noHitbox);
 
-			foreach (var g in HookUseItemHitbox.Enumerate(item.globalItems)) {
-				g.UseItemHitbox(item, player, ref hitbox, ref noHitbox);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UseItemHitbox(item, player, ref hitbox, ref noHitbox);
+					}
+				}
+			)
+		);
 
-		private static HookList HookMeleeEffects = AddHook<Action<Item, Player, Rectangle>>(g => g.MeleeEffects);
-		//in Terraria.Player.ItemCheck after magma stone dust effect for melee weapons
-		//  call ItemLoader.MeleeEffects(item, this, r2)
 		/// <summary>
 		/// Calls ModItem.MeleeEffects and all GlobalItem.MeleeEffects hooks.
 		/// </summary>
-		public static void MeleeEffects(Item item, Player player, Rectangle hitbox) {
-			item.ModItem?.MeleeEffects(player, hitbox);
+		public static readonly HookList<GlobalItem, Action<Item, Player, Rectangle>> MeleeEffects = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, Rectangle>>(
+				//Method reference
+				g => g.MeleeEffects,
+				//Invocation
+				e => (Item item, Player player, Rectangle hitbox) => {
+					item.ModItem?.MeleeEffects(player, hitbox);
 
-			foreach (var g in HookMeleeEffects.Enumerate(item.globalItems)) {
-				g.MeleeEffects(item, player, hitbox);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.MeleeEffects(item, player, hitbox);
+					}
+				}
+			)
+		);
 
-		private static HookList HookCanHitNPC = AddHook<Func<Item, Player, NPC, bool?>>(g => g.CanHitNPC);
-		//in Terraria.Player.ItemCheck before checking whether npc type can be hit add
-		//  bool? modCanHit = ItemLoader.CanHitNPC(item, this, Main.npc[num292]);
-		//  if(modCanHit.HasValue && !modCanHit.Value) { continue; }
-		//in if statement afterwards add || (modCanHit.HasValue && modCanHit.Value)
 		/// <summary>
 		/// Gathers the results of ModItem.CanHitNPC and all GlobalItem.CanHitNPC hooks. 
 		/// If any of them returns false, this returns false. 
 		/// Otherwise, if any of them returns true then this returns true. 
 		/// If all of them return null, this returns null.
 		/// </summary>
-		public static bool? CanHitNPC(Item item, Player player, NPC target) {
-			bool? flag = null;
+		public static readonly HookList<GlobalItem, Func<Item, Player, NPC, bool?>> CanHitNPC = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, NPC, bool?>>(
+				//Method reference
+				g => g.CanHitNPC,
+				//Invocation
+				e => (Item item, Player player, NPC target) => {
+					bool? flag = null;
 
-			foreach (GlobalItem g in HookCanHitNPC.Enumerate(item.globalItems)) {
-				bool? canHit = g.CanHitNPC(item, player, target);
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						bool? canHit = g.CanHitNPC(item, player, target);
 
-				if (canHit.HasValue) {
-					if (!canHit.Value) {
-						return false;
+						if (canHit.HasValue) {
+							if (!canHit.Value)
+								return false;
+
+							flag = true;
+						}
 					}
 
-					flag = true;
-				}
-			}
+					if (item.ModItem != null) {
+						bool? canHit = item.ModItem.CanHitNPC(player, target);
 
-			if (item.ModItem != null) {
-				bool? canHit = item.ModItem.CanHitNPC(player, target);
+						if (canHit.HasValue) {
+							if (!canHit.Value)
+								return false;
 
-				if (canHit.HasValue) {
-					if (!canHit.Value) {
-						return false;
+							flag = true;
+						}
 					}
 
-					flag = true;
+					return flag;
 				}
-			}
+			)
+		);
 
-			return flag;
-		}
-
-		private delegate void DelegateModifyHitNPC(Item item, Player player, NPC target, ref int damage, ref float knockBack, ref bool crit);
-		private static HookList HookModifyHitNPC = AddHook<DelegateModifyHitNPC>(g => g.ModifyHitNPC);
-		//in Terraria.Player.ItemCheck for melee attacks after damage variation
-		//  call ItemLoader.ModifyHitNPC(item, this, Main.npc[num292], ref num282, ref num283, ref flag18)
+		public delegate void DelegateModifyHitNPC(Item item, Player player, NPC target, ref int damage, ref float knockBack, ref bool crit);
 		/// <summary>
 		/// Calls ModItem.ModifyHitNPC, then all GlobalItem.ModifyHitNPC hooks.
 		/// </summary>
-		public static void ModifyHitNPC(Item item, Player player, NPC target, ref int damage, ref float knockBack, ref bool crit) {
-			item.ModItem?.ModifyHitNPC(player, target, ref damage, ref knockBack, ref crit);
+		public static readonly HookList<GlobalItem, DelegateModifyHitNPC> ModifyHitNPC = AddHook(
+			new HookList<GlobalItem, DelegateModifyHitNPC>(
+				//Method reference
+				g => g.ModifyHitNPC,
+				//Invocation
+				e => (Item item, Player player, NPC target, ref int damage, ref float knockBack, ref bool crit) => {
+					item.ModItem?.ModifyHitNPC(player, target, ref damage, ref knockBack, ref crit);
 
-			foreach (var g in HookModifyHitNPC.Enumerate(item.globalItems)) {
-				g.ModifyHitNPC(item, player, target, ref damage, ref knockBack, ref crit);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyHitNPC(item, player, target, ref damage, ref knockBack, ref crit);
+					}
+				}
+			)
+		);
 
-		private static HookList HookOnHitNPC = AddHook<Action<Item, Player, NPC, int, float, bool>>(g => g.OnHitNPC);
-		//in Terraria.Player.ItemCheck for melee attacks before updating informational accessories
-		//  call ItemLoader.OnHitNPC(item, this, Main.npc[num292], num295, num283, flag18)
 		/// <summary>
 		/// Calls ModItem.OnHitNPC and all GlobalItem.OnHitNPC hooks.
 		/// </summary>
-		public static void OnHitNPC(Item item, Player player, NPC target, int damage, float knockBack, bool crit) {
-			item.ModItem?.OnHitNPC(player, target, damage, knockBack, crit);
+		public static readonly HookList<GlobalItem, Action<Item, Player, NPC, int, float, bool>> OnHitNPC = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, NPC, int, float, bool>>(
+				//Method reference
+				g => g.OnHitNPC,
+				//Invocation
+				e => (Item item, Player player, NPC target, int damage, float knockBack, bool crit) => {
+					item.ModItem?.OnHitNPC(player, target, damage, knockBack, crit);
 
-			foreach (var g in HookOnHitNPC.Enumerate(item.globalItems)) {
-				g.OnHitNPC(item, player, target, damage, knockBack, crit);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnHitNPC(item, player, target, damage, knockBack, crit);
+					}
+				}
+			)
+		);
 
-		private static HookList HookCanHitPvp = AddHook<Func<Item, Player, Player, bool>>(g => g.CanHitPvp);
-		//in Terraria.Player.ItemCheck add to beginning of pvp collision check
 		/// <summary>
 		/// Calls all GlobalItem.CanHitPvp hooks, then ModItem.CanHitPvp, until one of them returns false. 
 		/// If all of them return true, this returns true.
 		/// </summary>
-		public static bool CanHitPvp(Item item, Player player, Player target) {
-			foreach (var g in HookCanHitPvp.Enumerate(item.globalItems)) {
-				if (!g.CanHitPvp(item, player, target))
-					return false;
-			}
+		public static readonly HookList<GlobalItem, Func<Item, Player, Player, bool>> CanHitPvp = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, Player, bool>>(
+				//Method reference
+				g => g.CanHitPvp,
+				//Invocation
+				e => (Item item, Player player, Player target) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (!g.CanHitPvp(item, player, target))
+							return false;
+					}
 
-			return item.ModItem == null || item.ModItem.CanHitPvp(player, target);
-		}
+					return item.ModItem == null || item.ModItem.CanHitPvp(player, target);
+				}
+			)
+		);
 
-		private delegate void DelegateModifyHitPvp(Item item, Player player, Player target, ref int damage, ref bool crit);
-		private static HookList HookModifyHitPvp = AddHook<DelegateModifyHitPvp>(g => g.ModifyHitPvp);
-		//in Terraria.Player.ItemCheck for pvp melee attacks after damage variation
-		//  call ItemLoader.ModifyHitPvp(item, this, Main.player[num302], ref num282, ref flag20)
+		public delegate void DelegateModifyHitPvp(Item item, Player player, Player target, ref int damage, ref bool crit);
 		/// <summary>
 		/// Calls ModItem.ModifyHitPvp, then all GlobalItem.ModifyHitPvp hooks.
 		/// </summary>
-		public static void ModifyHitPvp(Item item, Player player, Player target, ref int damage, ref bool crit) {
-			item.ModItem?.ModifyHitPvp(player, target, ref damage, ref crit);
+		public static readonly HookList<GlobalItem, DelegateModifyHitPvp> ModifyHitPvp = AddHook(
+			new HookList<GlobalItem, DelegateModifyHitPvp>(
+				//Method reference
+				g => g.ModifyHitPvp,
+				//Invocation
+				e => (Item item, Player player, Player target, ref int damage, ref bool crit) => {
+					item.ModItem?.ModifyHitPvp(player, target, ref damage, ref crit);
 
-			foreach (var g in HookModifyHitPvp.Enumerate(item.globalItems)) {
-				g.ModifyHitPvp(item, player, target, ref damage, ref crit);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyHitPvp(item, player, target, ref damage, ref crit);
+					}
+				}
+			)
+		);
 
-		private static HookList HookOnHitPvp = AddHook<Action<Item, Player, Player, int, bool>>(g => g.OnHitPvp);
-		//in Terraria.Player.ItemCheck for pvp melee attacks before NetMessage stuff
-		//  call ItemLoader.OnHitPvp(item, this, Main.player[num302], num304, flag20)
 		/// <summary>
 		/// Calls ModItem.OnHitPvp and all GlobalItem.OnHitPvp hooks.
 		/// </summary>
-		public static void OnHitPvp(Item item, Player player, Player target, int damage, bool crit) {
-			item.ModItem?.OnHitPvp(player, target, damage, crit);
+		public static readonly HookList<GlobalItem, Action<Item, Player, Player, int, bool>> OnHitPvp = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, Player, int, bool>>(
+				//Method reference
+				g => g.OnHitPvp,
+				//Invocation
+				e => (Item item, Player player, Player target, int damage, bool crit) => {
+					item.ModItem?.OnHitPvp(player, target, damage, crit);
 
-			foreach (var g in HookOnHitPvp.Enumerate(item.globalItems)) {
-				g.OnHitPvp(item, player, target, damage, crit);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnHitPvp(item, player, target, damage, crit);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUseItem = AddHook<Func<Item, Player, bool>>(g => g.UseItem);
 		/// <summary>
 		/// Returns true if any of ModItem.UseItem or GlobalItem.UseItem return true
 		/// Does not fail fast (calls every hook)
 		/// </summary>
-		public static bool UseItem(Item item, Player player) {
-			if (item.IsAir)
-				return false;
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> UseItem = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.UseItem,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return false;
 
-			bool flag = false;
-			if (item.ModItem != null)
-				flag |= item.ModItem.UseItem(player);
+					bool flag = false;
 
-			foreach (var g in HookUseItem.Enumerate(item.globalItems))
-				flag |= g.UseItem(item, player);
+					if (item.ModItem != null)
+						flag |= item.ModItem.UseItem(player);
 
-			return flag;
-		}
+					foreach (var g in e.Enumerate(item.globalItems))
+						flag |= g.UseItem(item, player);
 
-		private static HookList HookConsumeItem = AddHook<Func<Item, Player, bool>>(g => g.ConsumeItem);
-		//near end of Terraria.Player.ItemCheck
-		//  if (flag22 && ItemLoader.ConsumeItem(item, this))
+					return flag;
+				}
+			)
+		);
+
 		/// <summary>
 		/// If ModItem.ConsumeItem or any of the GlobalItem.ConsumeItem hooks returns false, sets consume to false.
 		/// </summary>
-		public static bool ConsumeItem(Item item, Player player) {
-			if (item.IsAir) return true;
-			if (item.ModItem != null && !item.ModItem.ConsumeItem(player))
-				return false;
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> ConsumeItem = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.ConsumeItem,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return true;
 
-			foreach (var g in HookConsumeItem.Enumerate(item.globalItems)) {
-				if (!g.ConsumeItem(item, player))
-					return false;
-			}
+					if (item.ModItem != null && !item.ModItem.ConsumeItem(player))
+						return false;
 
-			OnConsumeItem(item, player);
-			return true;
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (!g.ConsumeItem(item, player))
+							return false;
+					}
 
-		private static HookList HookOnConsumeItem = AddHook<Action<Item, Player>>(g => g.OnConsumeItem);
+					OnConsumeItem.Invoke(item, player);
+
+					return true;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.OnConsumeItem and all GlobalItem.OnConsumeItem hooks.
 		/// </summary>
-		public static void OnConsumeItem(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> OnConsumeItem = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.OnConsumeItem,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.OnConsumeItem(player);
+					item.ModItem?.OnConsumeItem(player);
 
-			foreach (var g in HookOnConsumeItem.Enumerate(item.globalItems)) {
-				g.OnConsumeItem(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.OnConsumeItem(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUseItemFrame = AddHook<Action<Item, Player>>(g => g.UseItemFrame);
-		//in Terraria.Player.PlayerFrame at end of useStyle if/else chain
-		//  call if(ItemLoader.UseItemFrame(this.inventory[this.selectedItem], this)) { return; }
 		/// <summary>
 		/// Calls ModItem.UseItemFrame, then all GlobalItem.UseItemFrame hooks, until one of them returns true. Returns whether any of the hooks returned true.
 		/// </summary>
-		public static void UseItemFrame(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> UseItemFrame = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.UseItemFrame,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UseItemFrame(player);
+					item.ModItem?.UseItemFrame(player);
 
-			foreach (var g in HookUseItemFrame.Enumerate(item.globalItems)) {
-				g.UseItemFrame(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UseItemFrame(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookHoldItemFrame = AddHook<Action<Item, Player>>(g => g.HoldItemFrame);
-		//in Terraria.Player.PlayerFrame at end of holdStyle if statements
-		//  call if(ItemLoader.HoldItemFrame(this.inventory[this.selectedItem], this)) { return; }
 		/// <summary>
 		/// Calls ModItem.HoldItemFrame, then all GlobalItem.HoldItemFrame hooks, until one of them returns true. Returns whether any of the hooks returned true.
 		/// </summary>
-		public static void HoldItemFrame(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> HoldItemFrame = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.HoldItemFrame,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.HoldItemFrame(player);
+					item.ModItem?.HoldItemFrame(player);
 
-			foreach (var g in HookHoldItemFrame.Enumerate(item.globalItems)) {
-				g.HoldItemFrame(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.HoldItemFrame(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookAltFunctionUse = AddHook<Func<Item, Player, bool>>(g => g.AltFunctionUse);
 		/// <summary>
 		/// Calls ModItem.AltFunctionUse, then all GlobalItem.AltFunctionUse hooks, until one of them returns true. Returns whether any of the hooks returned true.
 		/// </summary>
-		public static bool AltFunctionUse(Item item, Player player) {
-			if (item.IsAir)
-				return false;
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> AltFunctionUse = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.AltFunctionUse,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return false;
 
-			if (item.ModItem != null && item.ModItem.AltFunctionUse(player))
-				return true;
+					if (item.ModItem != null && item.ModItem.AltFunctionUse(player))
+						return true;
 
-			foreach (var g in HookAltFunctionUse.Enumerate(item.globalItems)) {
-				if (g.AltFunctionUse(item, player))
-					return true;
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (g.AltFunctionUse(item, player))
+							return true;
+					}
 
-			return false;
-		}
+					return false;
+				}
+			)
+		);
 
-		private static HookList HookUpdateInventory = AddHook<Action<Item, Player>>(g => g.UpdateInventory);
 		//place at end of first for loop in Terraria.Player.UpdateEquips
 		//  call ItemLoader.UpdateInventory(this.inventory[j], this)
 		/// <summary>
 		/// Calls ModItem.UpdateInventory and all GlobalItem.UpdateInventory hooks.
 		/// </summary>
-		public static void UpdateInventory(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> UpdateInventory = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.UpdateInventory,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UpdateInventory(player);
+					item.ModItem?.UpdateInventory(player);
 
-			foreach (var g in HookUpdateInventory.Enumerate(item.globalItems)) {
-				g.UpdateInventory(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UpdateInventory(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUpdateEquip = AddHook<Action<Item, Player>>(g => g.UpdateEquip);
 		/// <summary>
 		/// Hook at the end of Player.VanillaUpdateEquip can be called from modded slots for modded equipments
 		/// </summary>
-		public static void UpdateEquip(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> UpdateEquip = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.UpdateEquip,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UpdateEquip(player);
+					item.ModItem?.UpdateEquip(player);
 
-			foreach (var g in HookUpdateEquip.Enumerate(item.globalItems)) {
-				g.UpdateEquip(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UpdateEquip(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUpdateAccessory = AddHook<Action<Item, Player, bool>>(g => g.UpdateAccessory);
 		/// <summary>
 		/// Hook at the end of Player.ApplyEquipFunctional can be called from modded slots for modded equipments
 		/// </summary>
-		public static void UpdateAccessory(Item item, Player player, bool hideVisual) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player, bool>> UpdateAccessory = AddHook(
+			new HookList<GlobalItem, Action<Item, Player, bool>>(
+				//Method reference
+				g => g.UpdateAccessory,
+				//Invocation
+				e => (Item item, Player player, bool hideVisual) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UpdateAccessory(player, hideVisual);
+					item.ModItem?.UpdateAccessory(player, hideVisual);
 
-			foreach (var g in HookUpdateAccessory.Enumerate(item.globalItems)) {
-				g.UpdateAccessory(item, player, hideVisual);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UpdateAccessory(item, player, hideVisual);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUpdateVanity = AddHook<Action<Item, Player>>(g => g.UpdateVanity);
 		/// <summary>
 		/// Hook at the end of Player.ApplyEquipVanity can be called from modded slots for modded equipments
 		/// </summary>
-		public static void UpdateVanity(Item item, Player player) {
-			if (item.IsAir)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> UpdateVanity = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				g => g.UpdateVanity,
+				//Invocation
+				e => (Item item, Player player) => {
+					if (item.IsAir)
+						return;
 
-			item.ModItem?.UpdateVanity(player);
+					item.ModItem?.UpdateVanity(player);
 
-			foreach (var g in HookUpdateVanity.Enumerate(item.globalItems)) {
-				g.UpdateVanity(item, player);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.UpdateVanity(item, player);
+					}
+				}
+			)
+		);
 
-		private static HookList HookUpdateArmorSet = AddHook<Action<Player, string>>(g => g.UpdateArmorSet);
 		//at end of Terraria.Player.UpdateArmorSets call ItemLoader.UpdateArmorSet(this, this.armor[0], this.armor[1], this.armor[2])
 		/// <summary>
 		/// If the head's ModItem.IsArmorSet returns true, calls the head's ModItem.UpdateArmorSet. This is then repeated for the body, then the legs. Then for each GlobalItem, if GlobalItem.IsArmorSet returns a non-empty string, calls GlobalItem.UpdateArmorSet with that string.
 		/// </summary>
-		public static void UpdateArmorSet(Player player, Item head, Item body, Item legs) {
-			if (head.ModItem != null && head.ModItem.IsArmorSet(head, body, legs))
-				head.ModItem.UpdateArmorSet(player);
+		public static readonly HookList<GlobalItem, Action<Player, Item, Item, Item>> UpdateArmorSet = AddHook(
+			new HookList<GlobalItem, Action<Player, Item, Item, Item>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.UpdateArmorSet)),
+				//Invocation
+				e => (Player player, Item head, Item body, Item legs) => {
+					if (head.ModItem != null && head.ModItem.IsArmorSet(head, body, legs))
+						head.ModItem.UpdateArmorSet(player);
 
-			if (body.ModItem != null && body.ModItem.IsArmorSet(head, body, legs))
-				body.ModItem.UpdateArmorSet(player);
+					if (body.ModItem != null && body.ModItem.IsArmorSet(head, body, legs))
+						body.ModItem.UpdateArmorSet(player);
 
-			if (legs.ModItem != null && legs.ModItem.IsArmorSet(head, body, legs))
-				legs.ModItem.UpdateArmorSet(player);
+					if (legs.ModItem != null && legs.ModItem.IsArmorSet(head, body, legs))
+						legs.ModItem.UpdateArmorSet(player);
 
-			foreach (GlobalItem globalItem in HookUpdateArmorSet.Enumerate(globalItemsArray)) {
-				string set = globalItem.IsArmorSet(head, body, legs);
-				if (!string.IsNullOrEmpty(set))
-					globalItem.UpdateArmorSet(player, set);
-			}
-		}
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						string set = g.IsArmorSet(head, body, legs);
 
-		private static HookList HookPreUpdateVanitySet = AddHook<Action<Player, string>>(g => g.PreUpdateVanitySet);
-		//in Terraria.Player.PlayerFrame after setting armor effects fields call this
+						if (!string.IsNullOrEmpty(set))
+							g.UpdateArmorSet(player, set);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// If the player's head texture's IsVanitySet returns true, calls the equipment texture's PreUpdateVanitySet. This is then repeated for the player's body, then the legs. Then for each GlobalItem, if GlobalItem.IsVanitySet returns a non-empty string, calls GlobalItem.PreUpdateVanitySet, using player.head, player.body, and player.legs.
 		/// </summary>
-		public static void PreUpdateVanitySet(Player player) {
-			EquipTexture headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
-			EquipTexture bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
-			EquipTexture legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
-			if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
-				headTexture.PreUpdateVanitySet(player);
+		public static readonly HookList<GlobalItem, Action<Player>> PreUpdateVanitySet = AddHook(
+			new HookList<GlobalItem, Action<Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.PreUpdateVanitySet)),
+				//Invocation
+				e => (Player player) => {
+					var headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
+					var bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
+					var legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
 
-			if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
-				bodyTexture.PreUpdateVanitySet(player);
+					if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
+						headTexture.PreUpdateVanitySet(player);
 
-			if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
-				legTexture.PreUpdateVanitySet(player);
+					if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
+						bodyTexture.PreUpdateVanitySet(player);
 
-			foreach (GlobalItem globalItem in HookPreUpdateVanitySet.Enumerate(globalItemsArray)) {
-				string set = globalItem.IsVanitySet(player.head, player.body, player.legs);
-				if (!string.IsNullOrEmpty(set))
-					globalItem.PreUpdateVanitySet(player, set);
-			}
-		}
+					if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
+						legTexture.PreUpdateVanitySet(player);
 
-		private static HookList HookUpdateVanitySet = AddHook<Action<Player, string>>(g => g.UpdateVanitySet);
-		//in Terraria.Player.PlayerFrame after armor sets creating dust call this
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						string set = g.IsVanitySet(player.head, player.body, player.legs);
+
+						if (!string.IsNullOrEmpty(set))
+							g.PreUpdateVanitySet(player, set);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// If the player's head texture's IsVanitySet returns true, calls the equipment texture's UpdateVanitySet. This is then repeated for the player's body, then the legs. Then for each GlobalItem, if GlobalItem.IsVanitySet returns a non-empty string, calls GlobalItem.UpdateVanitySet, using player.head, player.body, and player.legs.
 		/// </summary>
-		public static void UpdateVanitySet(Player player) {
-			EquipTexture headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
-			EquipTexture bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
-			EquipTexture legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
-			if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
-				headTexture.UpdateVanitySet(player);
+		public static readonly HookList<GlobalItem, Action<Player>> UpdateVanitySet = AddHook(
+			new HookList<GlobalItem, Action<Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.UpdateVanitySet)),
+				//Invocation
+				e => (Player player) => {
+					var headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
+					var bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
+					var legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
 
-			if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
-				bodyTexture.UpdateVanitySet(player);
+					if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
+						headTexture.UpdateVanitySet(player);
 
-			if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
-				legTexture.UpdateVanitySet(player);
+					if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
+						bodyTexture.UpdateVanitySet(player);
 
-			foreach (GlobalItem globalItem in HookUpdateVanitySet.Enumerate(globalItemsArray)) {
-				string set = globalItem.IsVanitySet(player.head, player.body, player.legs);
-				if (!string.IsNullOrEmpty(set))
-					globalItem.UpdateVanitySet(player, set);
-			}
-		}
+					if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
+						legTexture.UpdateVanitySet(player);
 
-		private static HookList HookArmorSetShadows = AddHook<Action<Player, string>>(g => g.ArmorSetShadows);
-		//in Terraria.Main.DrawPlayers after armor combinations setting flags call
-		//  ItemLoader.ArmorSetShadows(player);
+					foreach (var globalItem in e.Enumerate(globalItemsArray)) {
+						string set = globalItem.IsVanitySet(player.head, player.body, player.legs);
+
+						if (!string.IsNullOrEmpty(set))
+							globalItem.UpdateVanitySet(player, set);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// If the player's head texture's IsVanitySet returns true, calls the equipment texture's ArmorSetShadows. This is then repeated for the player's body, then the legs. Then for each GlobalItem, if GlobalItem.IsVanitySet returns a non-empty string, calls GlobalItem.ArmorSetShadows, using player.head, player.body, and player.legs.
 		/// </summary>
-		public static void ArmorSetShadows(Player player) {
-			EquipTexture headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
-			EquipTexture bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
-			EquipTexture legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
-			if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
-				headTexture.ArmorSetShadows(player);
+		public static readonly HookList<GlobalItem, Action<Player>> ArmorSetShadows = AddHook(
+			new HookList<GlobalItem, Action<Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.ArmorSetShadows)),
+				//Invocation
+				e => (Player player) => {
+					var headTexture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
+					var bodyTexture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
+					var legTexture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
 
-			if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
-				bodyTexture.ArmorSetShadows(player);
+					if (headTexture != null && headTexture.IsVanitySet(player.head, player.body, player.legs))
+						headTexture.ArmorSetShadows(player);
 
-			if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
-				legTexture.ArmorSetShadows(player);
+					if (bodyTexture != null && bodyTexture.IsVanitySet(player.head, player.body, player.legs))
+						bodyTexture.ArmorSetShadows(player);
 
-			foreach (GlobalItem globalItem in HookArmorSetShadows.Enumerate(globalItemsArray)) {
-				string set = globalItem.IsVanitySet(player.head, player.body, player.legs);
-				if (!string.IsNullOrEmpty(set))
-					globalItem.ArmorSetShadows(player, set);
-			}
-		}
+					if (legTexture != null && legTexture.IsVanitySet(player.head, player.body, player.legs))
+						legTexture.ArmorSetShadows(player);
 
-		private delegate void DelegateSetMatch(int armorSlot, int type, bool male, ref int equipSlot, ref bool robes);
-		private static HookList HookSetMatch = AddHook<DelegateSetMatch>(g => g.SetMatch);
+					foreach (var globalItem in e.Enumerate(globalItemsArray)) {
+						string set = globalItem.IsVanitySet(player.head, player.body, player.legs);
+
+						if (!string.IsNullOrEmpty(set))
+							globalItem.ArmorSetShadows(player, set);
+					}
+				}
+			)
+		);
+
+		public delegate void DelegateSetMatch(int armorSlot, int type, bool male, ref int equipSlot, ref bool robes);
 		/// <summary>
 		/// Calls EquipTexture.SetMatch, then all GlobalItem.SetMatch hooks.
 		/// </summary>   
-		public static void SetMatch(int armorSlot, int type, bool male, ref int equipSlot, ref bool robes) {
-			EquipTexture texture = EquipLoader.GetEquipTexture((EquipType)armorSlot, type);
-			texture?.SetMatch(male, ref equipSlot, ref robes);
+		public static readonly HookList<GlobalItem, DelegateSetMatch> SetMatch = AddHook(
+			new HookList<GlobalItem, DelegateSetMatch>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.SetMatch)),
+				//Invocation
+				e => (int armorSlot, int type, bool male, ref int equipSlot, ref bool robes) => {
+					var texture = EquipLoader.GetEquipTexture((EquipType)armorSlot, type);
 
-			foreach (var g in HookSetMatch.Enumerate(globalItemsArray)) {
-				g.SetMatch(armorSlot, type, male, ref equipSlot, ref robes);
-			}
-		}
+					texture?.SetMatch(male, ref equipSlot, ref robes);
 
-		private static HookList HookCanRightClick = AddHook<Func<Item, bool>>(g => g.CanRightClick);
-		//in Terraria.UI.ItemSlot.RightClick in end of item-opening if/else chain before final else
-		//  make else if(ItemLoader.CanRightClick(inv[slot]))
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.SetMatch(armorSlot, type, male, ref equipSlot, ref robes);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.CanRightClick, then all GlobalItem.CanRightClick hooks, until one of the returns true. If one of the returns true, returns Main.mouseRight. Otherwise, returns false.
 		/// </summary>
-		public static bool CanRightClick(Item item) {
-			if (item.IsAir || !Main.mouseRight)
-				return false;
+		public static readonly HookList<GlobalItem, Func<Item, bool>> CanRightClick = AddHook(
+			new HookList<GlobalItem, Func<Item, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.CanRightClick)),
+				//Invocation
+				e => (Item item) => {
+					if (item.IsAir || !Main.mouseRight)
+						return false;
 
-			if (item.ModItem != null && item.ModItem.CanRightClick())
-				return true;
+					if (item.ModItem != null && item.ModItem.CanRightClick())
+						return true;
 
-			foreach (var g in HookCanRightClick.Enumerate(item.globalItems)) {
-				if (g.CanRightClick(item))
-					return true;
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (g.CanRightClick(item))
+							return true;
+					}
 
-			return false;
-		}
+					return false;
+				}
+			)
+		);
 
-		private static HookList HookRightClick = AddHook<Action<Item, Player>>(g => g.RightClick);
-		//in Terraria.UI.ItemSlot in block from CanRightClick call ItemLoader.RightClick(inv[slot], player)
 		/// <summary>
 		/// If Main.mouseRightRelease is true, the following steps are taken:
 		/// 1. Call ModItem.RightClick
@@ -1057,26 +1316,32 @@ namespace Terraria.ModLoader
 		/// 7. Sets Main.mouseRightRelease to false
 		/// 8. Calls Recipe.FindRecipes.
 		/// </summary>
-		public static void RightClick(Item item, Player player) {
-			if (!Main.mouseRightRelease)
-				return;
+		public static readonly HookList<GlobalItem, Action<Item, Player>> RightClick = AddHook(
+			new HookList<GlobalItem, Action<Item, Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.RightClick)),
+				//Invocation
+				e => (Item item, Player player) => {
+					if (!Main.mouseRightRelease)
+						return;
 
-			item.ModItem?.RightClick(player);
+					item.ModItem?.RightClick(player);
 
-			foreach (var g in HookRightClick.Enumerate(item.globalItems)) {
-				g.RightClick(item, player);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.RightClick(item, player);
+					}
 
-			if (ConsumeItem(item, player) && --item.stack == 0)
-				item.SetDefaults();
+					if (ConsumeItem.Invoke(item, player) && --item.stack == 0)
+						item.SetDefaults();
 
-			SoundEngine.PlaySound(7);
-			Main.stackSplit = 30;
-			Main.mouseRightRelease = false;
-			Recipe.FindRecipes();
-		}
+					SoundEngine.PlaySound(7);
+					Main.stackSplit = 30;
+					Main.mouseRightRelease = false;
+					Recipe.FindRecipes();
+				}
+			)
+		);
 
-		//in Terraria.UI.ItemSlot add this to boss bag check
 		/// <summary>
 		/// Returns whether ModItem.bossBagNPC is greater than 0. Returns false if item is not a modded item.
 		/// </summary>
@@ -1084,220 +1349,289 @@ namespace Terraria.ModLoader
 			return item.ModItem != null && item.ModItem.BossBagNPC > 0;
 		}
 
-		//in Terraria.Player.OpenBossBag after setting num14 call
-		//  ItemLoader.OpenBossBag(type, this, ref num14);
 		/// <summary>
 		/// If the item is a modded item and ModItem.bossBagNPC is greater than 0, calls ModItem.OpenBossBag and sets npc to ModItem.bossBagNPC.
 		/// </summary>
 		public static void OpenBossBag(int type, Player player, ref int npc) {
 			ModItem modItem = GetItem(type);
+
 			if (modItem != null && modItem.BossBagNPC > 0) {
 				modItem.OpenBossBag(player);
 				npc = modItem.BossBagNPC;
 			}
 		}
 
-		private static HookList HookPreOpenVanillaBag = AddHook<Func<string, Player, int, bool>>(g => g.PreOpenVanillaBag);
-		//in beginning of Terraria.Player.openBag methods add
-		//  if(!ItemLoader.PreOpenVanillaBag("bagName", this, arg)) { return; }
-		//at the end of the following methods in Player.cs, add: NPCLoader.blockLoot.Clear(); // clear blockloot
-		//methods: OpenBossBag, openCrate, openGoodieBag, openHerbBag, openLockbox, openPresent
 		/// <summary>
 		/// Calls each GlobalItem.PreOpenVanillaBag hook until one of them returns false. Returns true if all of them returned true.
 		/// </summary>
-		public static bool PreOpenVanillaBag(string context, Player player, int arg) {
-			bool result = true;
-			foreach (var g in HookPreOpenVanillaBag.Enumerate(globalItemsArray)) {
-				result &= g.PreOpenVanillaBag(context, player, arg);
-			}
+		public static readonly HookList<GlobalItem, Func<string, Player, int, bool>> PreOpenVanillaBag = AddHook(
+			new HookList<GlobalItem, Func<string, Player, int, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.PreOpenVanillaBag)),
+				//Invocation
+				e => (string context, Player player, int arg) => {
+					bool result = true;
 
-			if (!result) {
-				NPCLoader.blockLoot.Clear(); // clear blockloot
-				return false;
-			}
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						result &= g.PreOpenVanillaBag(context, player, arg);
+					}
 
-			return true;
-		}
+					if (!result) {
+						NPCLoader.blockLoot.Clear(); // clear blockloot
+						return false;
+					}
 
-		private static HookList HookOpenVanillaBag = AddHook<Action<string, Player, int>>(g => g.OpenVanillaBag);
-		//in Terraria.Player.openBag methods after PreOpenVanillaBag if statements
-		//  add ItemLoader.OpenVanillaBag("bagname", this, arg);
+					return true;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls all GlobalItem.OpenVanillaBag hooks.
 		/// </summary>
-		public static void OpenVanillaBag(string context, Player player, int arg) {
-			foreach (var g in HookOpenVanillaBag.Enumerate(globalItemsArray)) {
-				g.OpenVanillaBag(context, player, arg);
-			}
-		}
+		public static readonly HookList<GlobalItem, Action<string, Player, int>> OpenVanillaBag = AddHook(
+			new HookList<GlobalItem, Action<string, Player, int>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.OpenVanillaBag)),
+				//Invocation
+				e => (string context, Player player, int arg) => {
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.OpenVanillaBag(context, player, arg);
+					}
+				}
+			)
+		);
 
-		private delegate bool DelegateReforgePrice(Item item, ref int reforgePrice, ref bool canApplyDiscount);
-		private static HookList HookReforgePrice = AddHook<DelegateReforgePrice>(g => g.ReforgePrice);
+		public delegate bool DelegateReforgePrice(Item item, ref int reforgePrice, ref bool canApplyDiscount);
+
 		/// <summary>
 		/// Call all ModItem.ReforgePrice, then GlobalItem.ReforgePrice hooks.
 		/// </summary>
 		/// <param name="canApplyDiscount"></param>
 		/// <returns></returns>
-		public static bool ReforgePrice(Item item, ref int reforgePrice, ref bool canApplyDiscount) {
-			bool b = item.ModItem?.ReforgePrice(ref reforgePrice, ref canApplyDiscount) ?? true;
+		public static readonly HookList<GlobalItem, DelegateReforgePrice> ReforgePrice = AddHook(
+			new HookList<GlobalItem, DelegateReforgePrice>(
+				//Method reference
+				g => g.ReforgePrice,
+				//Invocation
+				e => (Item item, ref int reforgePrice, ref bool canApplyDiscount) => {
+					bool b = item.ModItem?.ReforgePrice(ref reforgePrice, ref canApplyDiscount) ?? true;
 
-			foreach (var g in HookReforgePrice.Enumerate(item.globalItems)) {
-				b &= g.ReforgePrice(item, ref reforgePrice, ref canApplyDiscount);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						b &= g.ReforgePrice(item, ref reforgePrice, ref canApplyDiscount);
+					}
 
-			return b;
-		}
+					return b;
+				}
+			)
+		);
 
-		// @todo: PreReforge marked obsolete until v0.11
-		private static HookList HookPreReforge = AddHook<Func<Item, bool>>(g => g.PreReforge);
 		/// <summary>
 		/// Calls ModItem.PreReforge, then all GlobalItem.PreReforge hooks.
 		/// </summary>
-		public static bool PreReforge(Item item) {
-			bool b = item.ModItem?.PreReforge() ?? true;
+		public static readonly HookList<GlobalItem, Func<Item, bool>> PreReforge = AddHook(
+			new HookList<GlobalItem, Func<Item, bool>>(
+				//Method reference
+				g => g.PreReforge,
+				//Invocation
+				e => (Item item) => {
+					bool b = item.ModItem?.PreReforge() ?? true;
 
-			foreach (var g in HookPreReforge.Enumerate(item.globalItems)) {
-				b &= g.PreReforge(item);
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						b &= g.PreReforge(item);
+					}
 
-			return b;
-		}
+					return b;
+				}
+			)
+		);
 
-		private static HookList HookPostReforge = AddHook<Action<Item>>(g => g.PostReforge);
 		/// <summary>
 		/// Calls ModItem.PostReforge, then all GlobalItem.PostReforge hooks.
 		/// </summary>
-		public static void PostReforge(Item item) {
-			item.ModItem?.PostReforge();
+		public static readonly HookList<GlobalItem, Action<Item>> PostReforge = AddHook(
+			new HookList<GlobalItem, Action<Item>>(
+				//Method reference
+				g => g.PostReforge,
+				//Invocation
+				e => (Item item) => {
+					item.ModItem?.PostReforge();
 
-			foreach (var g in HookPostReforge.Enumerate(item.globalItems)) {
-				g.PostReforge(item);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostReforge(item);
+					}
+				}
+			)
+		);
 
-		private delegate void DelegateDrawHands(int body, ref bool drawHands, ref bool drawArms);
-		private static HookList HookDrawHands = AddHook<DelegateDrawHands>(g => g.DrawHands);
+		public delegate void DelegateDrawHands(Player player, ref bool drawHands, ref bool drawArms);
+
 		/// <summary>
 		/// Calls the item's body equipment texture's DrawHands hook, then all GlobalItem.DrawHands hooks.
 		/// "body" is the player's associated body equipment texture.
 		/// </summary>
-		public static void DrawHands(Player player, ref bool drawHands, ref bool drawArms) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
-			texture?.DrawHands(ref drawHands, ref drawArms);
+		public static readonly HookList<GlobalItem, DelegateDrawHands> DrawHands = AddHook(
+			new HookList<GlobalItem, DelegateDrawHands>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawHands)),
+				//Invocation
+				e => (Player player, ref bool drawHands, ref bool drawArms) => {
+					var texture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
 
-			foreach (var g in HookDrawHands.Enumerate(globalItemsArray)) {
-				g.DrawHands(player.body, ref drawHands, ref drawArms);
-			}
-		}
+					texture?.DrawHands(ref drawHands, ref drawArms);
 
-		private delegate void DelegateDrawHair(int body, ref bool drawHair, ref bool drawAltHair);
-		private static HookList HookDrawHair = AddHook<DelegateDrawHair>(g => g.DrawHair);
-		//in Terraria.Main.DrawPlayerHead after if statement that sets flag2 to true
-		//  call ItemLoader.DrawHair(drawPlayer, ref flag, ref flag2)
-		//in Terraria.Main.DrawPlayer after if statement that sets flag5 to true
-		//  call ItemLoader.DrawHair(drawPlayer, ref flag4, ref flag5)
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.DrawHands(player.body, ref drawHands, ref drawArms);
+					}
+				}
+			)
+		);
+
+		public delegate void DelegateDrawHair(Player player, ref bool drawHair, ref bool drawAltHair);
 		/// <summary>
 		/// Calls the item's head equipment texture's DrawHair hook, then all GlobalItem.DrawHair hooks.
 		/// "head" is the player's associated head equipment texture.
 		/// </summary>
-		public static void DrawHair(Player player, ref bool drawHair, ref bool drawAltHair) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
-			texture?.DrawHair(ref drawHair, ref drawAltHair);
+		public static readonly HookList<GlobalItem, DelegateDrawHair> DrawHair = AddHook(
+			new HookList<GlobalItem, DelegateDrawHair>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawHair)),
+				//Invocation
+				e => (Player player, ref bool drawHair, ref bool drawAltHair) => {
+					var texture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
 
-			foreach (var g in HookDrawHair.Enumerate(globalItemsArray)) {
-				g.DrawHair(player.head, ref drawHair, ref drawAltHair);
-			}
-		}
+					texture?.DrawHair(ref drawHair, ref drawAltHair);
 
-		private static HookList HookDrawHead = AddHook<Func<int, bool>>(g => g.DrawHead);
-		//in Terraria.Main.DrawPlayerHead in if statement after ItemLoader.DrawHair
-		//and in Terraria.Main.DrawPlayer in if (!drawPlayer.invis && drawPlayer.head != 38 && drawPlayer.head != 135)
-		//  use && with ItemLoader.DrawHead(drawPlayer)
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.DrawHair(player.head, ref drawHair, ref drawAltHair);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls the item's head equipment texture's DrawHead hook, then all GlobalItem.DrawHead hooks, until one of them returns false. Returns true if none of them return false.
 		/// "head" is the player's associated head equipment texture.
 		/// </summary>
-		public static bool DrawHead(Player player) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
-			if (texture != null && !texture.DrawHead())
-				return false;
+		public static readonly HookList<GlobalItem, Func<Player, bool>> DrawHead = AddHook(
+			new HookList<GlobalItem, Func<Player, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawHead)),
+				//Invocation
+				e => (Player player) => {
+					EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Head, player.head);
 
-			foreach (var g in HookDrawHead.Enumerate(globalItemsArray)) {
-				if (!g.DrawHead(player.head))
-					return false;
-			}
+					if (texture != null && !texture.DrawHead())
+						return false;
 
-			return true;
-		}
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						if (!g.DrawHead(player.head))
+							return false;
+					}
 
-		private static HookList HookDrawBody = AddHook<Func<int, bool>>(g => g.DrawBody);
+					return true;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls the item's body equipment texture's DrawBody hook, then all GlobalItem.DrawBody hooks, until one of them returns false. Returns true if none of them return false.
 		/// "body" is the player's associated body equipment texture.
 		/// </summary>
-		public static bool DrawBody(Player player) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
-			if (texture != null && !texture.DrawBody())
-				return false;
+		public static readonly HookList<GlobalItem, Func<Player, bool>> DrawBody = AddHook(
+			new HookList<GlobalItem, Func<Player, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawBody)),
+				//Invocation
+				e => (Player player) => {
+					var texture = EquipLoader.GetEquipTexture(EquipType.Body, player.body);
 
-			foreach (var g in HookDrawBody.Enumerate(globalItemsArray)) {
-				if (!g.DrawBody(player.body))
-					return false;
-			}
+					if (texture != null && !texture.DrawBody())
+						return false;
 
-			return true;
-		}
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						if (!g.DrawBody(player.body))
+							return false;
+					}
 
-		private static HookList HookDrawLegs = AddHook<Func<int, int, bool>>(g => g.DrawLegs);
+					return true;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls the item's leg equipment texture's DrawLegs hook, then the item's shoe equipment texture's DrawLegs hook, then all GlobalItem.DrawLegs hooks, until one of them returns false. Returns true if none of them return false.
 		/// "legs" and "shoes" are the player's associated legs and shoes equipment textures.
 		/// </summary>
-		public static bool DrawLegs(Player player) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
-			if (texture != null && !texture.DrawLegs())
-				return false;
+		public static readonly HookList<GlobalItem, Func<Player, bool>> DrawLegs = AddHook(
+			new HookList<GlobalItem, Func<Player, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawLegs)),
+				//Invocation
+				e => (Player player) => {
+					var texture = EquipLoader.GetEquipTexture(EquipType.Legs, player.legs);
 
-			texture = EquipLoader.GetEquipTexture(EquipType.Shoes, player.shoe);
-			if (texture != null && !texture.DrawLegs())
-				return false;
+					if (texture != null && !texture.DrawLegs())
+						return false;
 
-			foreach (var g in HookDrawLegs.Enumerate(globalItemsArray)) {
-				if (!g.DrawLegs(player.legs, player.shoe))
-					return false;
-			}
+					texture = EquipLoader.GetEquipTexture(EquipType.Shoes, player.shoe);
 
-			return true;
-		}
+					if (texture != null && !texture.DrawLegs())
+						return false;
 
-		private delegate void DelegateDrawArmorColor(EquipType type, int slot, Player drawPlayer, float shadow, ref Color color, ref int glowMask, ref Color glowMaskColor);
-		private static HookList HookDrawArmorColor = AddHook<DelegateDrawArmorColor>(g => g.DrawArmorColor);
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						if (!g.DrawLegs(player.legs, player.shoe))
+							return false;
+					}
+
+					return true;
+				}
+			)
+		);
+
+		public delegate void DelegateDrawArmorColor(EquipType type, int slot, Player drawPlayer, float shadow, ref Color color, ref int glowMask, ref Color glowMaskColor);
+
 		/// <summary>
 		/// Calls the item's equipment texture's DrawArmorColor hook, then all GlobalItem.DrawArmorColor hooks.
 		/// </summary>
-		public static void DrawArmorColor(EquipType type, int slot, Player drawPlayer, float shadow, ref Color color,
-			ref int glowMask, ref Color glowMaskColor) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(type, slot);
-			texture?.DrawArmorColor(drawPlayer, shadow, ref color, ref glowMask, ref glowMaskColor);
+		public static readonly HookList<GlobalItem, DelegateDrawArmorColor> DrawArmorColor = AddHook(
+			new HookList<GlobalItem, DelegateDrawArmorColor>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.DrawArmorColor)),
+				//Invocation
+				e => (EquipType type, int slot, Player drawPlayer, float shadow, ref Color color, ref int glowMask, ref Color glowMaskColor) => {
+					var texture = EquipLoader.GetEquipTexture(type, slot);
 
-			foreach (var g in HookDrawArmorColor.Enumerate(globalItemsArray)) {
-				g.DrawArmorColor(type, slot, drawPlayer, shadow, ref color, ref glowMask, ref glowMaskColor);
-			}
-		}
+					texture?.DrawArmorColor(drawPlayer, shadow, ref color, ref glowMask, ref glowMaskColor);
 
-		private delegate void DelegateArmorArmGlowMask(int slot, Player drawPlayer, float shadow, ref int glowMask, ref Color color);
-		private static HookList HookArmorArmGlowMask = AddHook<DelegateArmorArmGlowMask>(g => g.ArmorArmGlowMask);
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.DrawArmorColor(type, slot, drawPlayer, shadow, ref color, ref glowMask, ref glowMaskColor);
+					}
+				}
+			)
+		);
+
+		public delegate void DelegateArmorArmGlowMask(int slot, Player drawPlayer, float shadow, ref int glowMask, ref Color color);
+
 		/// <summary>
 		/// Calls the item's body equipment texture's ArmorArmGlowMask hook, then all GlobalItem.ArmorArmGlowMask hooks.
 		/// </summary>
-		public static void ArmorArmGlowMask(int slot, Player drawPlayer, float shadow, ref int glowMask, ref Color color) {
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Body, slot);
-			texture?.ArmorArmGlowMask(drawPlayer, shadow, ref glowMask, ref color);
+		public static readonly HookList<GlobalItem, DelegateArmorArmGlowMask> ArmorArmGlowMask = AddHook(
+			new HookList<GlobalItem, DelegateArmorArmGlowMask>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.ArmorArmGlowMask)),
+				//Invocation
+				e => (int slot, Player drawPlayer, float shadow, ref int glowMask, ref Color color) => {
+					var texture = EquipLoader.GetEquipTexture(EquipType.Body, slot);
 
-			foreach (var g in HookArmorArmGlowMask.Enumerate(globalItemsArray)) {
-				g.ArmorArmGlowMask(slot, drawPlayer, shadow, ref glowMask, ref color);
-			}
-		}
+					texture?.ArmorArmGlowMask(drawPlayer, shadow, ref glowMask, ref color);
+
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.ArmorArmGlowMask(slot, drawPlayer, shadow, ref glowMask, ref color);
+					}
+				}
+			)
+		);
 
 		/// <summary>s
 		/// Returns the wing item that the player is functionally using. If player.wingsLogic has been modified, so no equipped wing can be found to match what the player is using, this creates a new Item object to return.
@@ -1305,501 +1639,674 @@ namespace Terraria.ModLoader
 		public static Item GetWing(Player player) {
 			//TODO: this doesn't work with wings in modded accessory slots
 			Item item = null;
+
 			for (int k = 3; k < 10; k++) {
 				if (player.armor[k].wingSlot == player.wingsLogic) {
 					item = player.armor[k];
 				}
 			}
+
 			if (item != null) {
 				return item;
 			}
+
 			if (player.wingsLogic > 0 && player.wingsLogic < Main.maxWings) {
 				item = new Item();
 				item.SetDefaults(vanillaWings[player.wingsLogic]);
 				return item;
 			}
+
 			if (player.wingsLogic >= Main.maxWings) {
-				EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
+				var texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
+
 				if (texture?.Item != null)
 					return texture.Item.Item;
 			}
+
 			return null;
 		}
 
-		private delegate void DelegateVerticalWingSpeeds(Item item, Player player, ref float ascentWhenFalling, ref float ascentWhenRising, ref float maxCanAscendMultiplier, ref float maxAscentMultiplier, ref float constantAscend);
-		private static HookList HookVerticalWingSpeeds = AddHook<DelegateVerticalWingSpeeds>(g => g.VerticalWingSpeeds);
-		//in Terraria.Player.WingMovement after if statements that set num1-5
-		//  call ItemLoader.VerticalWingSpeeds(this, ref num2, ref num5, ref num4, ref num3, ref num)
+		public delegate void DelegateVerticalWingSpeeds(Player player, ref float ascentWhenFalling, ref float ascentWhenRising, ref float maxCanAscendMultiplier, ref float maxAscentMultiplier, ref float constantAscend);
+
 		/// <summary>
 		/// If the player is using wings, this uses the result of GetWing, and calls ModItem.VerticalWingSpeeds then all GlobalItem.VerticalWingSpeeds hooks.
 		/// </summary>
-		public static void VerticalWingSpeeds(Player player, ref float ascentWhenFalling, ref float ascentWhenRising,
-			ref float maxCanAscendMultiplier, ref float maxAscentMultiplier, ref float constantAscend) {
-			Item item = GetWing(player);
-			if (item == null) {
-				EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
-				texture?.VerticalWingSpeeds(
-					player, ref ascentWhenFalling, ref ascentWhenRising, ref maxCanAscendMultiplier,
-					ref maxAscentMultiplier, ref constantAscend);
-				return;
-			}
+		public static readonly HookList<GlobalItem, DelegateVerticalWingSpeeds> VerticalWingSpeeds = AddHook(
+			new HookList<GlobalItem, DelegateVerticalWingSpeeds>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.VerticalWingSpeeds)),
+				//Invocation
+				e => (Player player, ref float ascentWhenFalling, ref float ascentWhenRising, ref float maxCanAscendMultiplier, ref float maxAscentMultiplier, ref float constantAscend) => {
+					Item item = GetWing(player);
 
-			item.ModItem?.VerticalWingSpeeds(player, ref ascentWhenFalling, ref ascentWhenRising, ref maxCanAscendMultiplier,
-				ref maxAscentMultiplier, ref constantAscend);
+					if (item == null) {
+						var texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
 
-			foreach (var g in HookVerticalWingSpeeds.Enumerate(item.globalItems)) {
-				g.VerticalWingSpeeds(item, player, ref ascentWhenFalling, ref ascentWhenRising,
-					ref maxCanAscendMultiplier, ref maxAscentMultiplier, ref constantAscend);
-			}
-		}
+						texture?.VerticalWingSpeeds(player, ref ascentWhenFalling, ref ascentWhenRising, ref maxCanAscendMultiplier, ref maxAscentMultiplier, ref constantAscend);
 
-		private delegate void DelegateHorizontalWingSpeeds(Item item, Player player, ref float speed, ref float acceleration);
-		private static HookList HookHorizontalWingSpeeds = AddHook<DelegateHorizontalWingSpeeds>(g => g.HorizontalWingSpeeds);
-		//in Terraria.Player.Update after wingsLogic if statements modifying accRunSpeed and runAcceleration
-		//  call ItemLoader.HorizontalWingSpeeds(this)
+						return;
+					}
+
+					item.ModItem?.VerticalWingSpeeds(player, ref ascentWhenFalling, ref ascentWhenRising, ref maxCanAscendMultiplier, ref maxAscentMultiplier, ref constantAscend);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.VerticalWingSpeeds(item, player, ref ascentWhenFalling, ref ascentWhenRising, ref maxCanAscendMultiplier, ref maxAscentMultiplier, ref constantAscend);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// If the player is using wings, this uses the result of GetWing, and calls ModItem.HorizontalWingSpeeds then all GlobalItem.HorizontalWingSpeeds hooks.
 		/// </summary>
-		public static void HorizontalWingSpeeds(Player player) {
-			Item item = GetWing(player);
-			if (item == null) {
-				EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
-				texture?.HorizontalWingSpeeds(player, ref player.accRunSpeed, ref player.runAcceleration);
-				return;
-			}
-			
-			item.ModItem?.HorizontalWingSpeeds(player, ref player.accRunSpeed, ref player.runAcceleration);
+		public static readonly HookList<GlobalItem, Action<Player>> HorizontalWingSpeeds = AddHook(
+			new HookList<GlobalItem, Action<Player>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.HorizontalWingSpeeds)),
+				//Invocation
+				e => (Player player) => {
+					Item item = GetWing(player);
 
-			foreach (var g in HookHorizontalWingSpeeds.Enumerate(item.globalItems)) {
-				g.HorizontalWingSpeeds(item, player, ref player.accRunSpeed, ref player.runAcceleration);
-			}
-		}
+					if (item == null) {
+						var texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wingsLogic);
 
-		private static HookList HookWingUpdate = AddHook<Func<int, Player, bool, bool>>(g => g.WingUpdate);
+						texture?.HorizontalWingSpeeds(player, ref player.accRunSpeed, ref player.runAcceleration);
+						return;
+					}
+
+					item.ModItem?.HorizontalWingSpeeds(player, ref player.accRunSpeed, ref player.runAcceleration);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.HorizontalWingSpeeds(item, player, ref player.accRunSpeed, ref player.runAcceleration);
+					}
+				}
+			)
+		);
+
 		/// <summary>
 		/// If wings can be seen on the player, calls the player's wing's equipment texture's WingUpdate and all GlobalItem.WingUpdate hooks.
 		/// </summary>
-		public static bool WingUpdate(Player player, bool inUse) {
-			if (player.wings <= 0)
-				return false;
+		public static readonly HookList<GlobalItem, Func<Player, bool, bool>> WingUpdate = AddHook(
+			new HookList<GlobalItem, Func<Player, bool, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.WingUpdate)),
+				//Invocation
+				e => (Player player, bool inUse) => {
+					if (player.wings <= 0)
+						return false;
 
-			EquipTexture texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wings);
-			bool? retVal = texture?.WingUpdate(player, inUse);
+					var texture = EquipLoader.GetEquipTexture(EquipType.Wings, player.wings);
+					bool? retVal = texture?.WingUpdate(player, inUse);
 
-			foreach (var g in HookWingUpdate.Enumerate(globalItemsArray)) {
-				retVal |= g.WingUpdate(player.wings, player, inUse);
-			}
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						retVal |= g.WingUpdate(player.wings, player, inUse);
+					}
 
-			return retVal ?? false;
-		}
+					return retVal ?? false;
+				}
+			)
+		);
 
-		private delegate void DelegateUpdate(Item item, ref float gravity, ref float maxFallSpeed);
-		private static HookList HookUpdate = AddHook<DelegateUpdate>(g => g.Update);
-		//in Terraria.Item.UpdateItem before item movement (denoted by ItemID.Sets.ItemNoGravity)
-		//  call ItemLoader.Update(this, ref num, ref num2)
+		public delegate void DelegateUpdate(Item item, ref float gravity, ref float maxFallSpeed);
 		/// <summary>
 		/// Calls ModItem.Update, then all GlobalItem.Update hooks.
 		/// </summary>
-		public static void Update(Item item, ref float gravity, ref float maxFallSpeed) {
-			item.ModItem?.Update(ref gravity, ref maxFallSpeed);
+		public static readonly HookList<GlobalItem, DelegateUpdate> Update = AddHook(
+			new HookList<GlobalItem, DelegateUpdate>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.Update)),
+				//Invocation
+				e => (Item item, ref float gravity, ref float maxFallSpeed) => {
+					item.ModItem?.Update(ref gravity, ref maxFallSpeed);
 
-			foreach (var g in HookUpdate.Enumerate(item.globalItems)) {
-				g.Update(item, ref gravity, ref maxFallSpeed);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.Update(item, ref gravity, ref maxFallSpeed);
+					}
+				}
+			)
+		);
 
-		private static HookList HookCanBurnInLava = AddHook<Func<Item, bool?>>(g => g.CanBurnInLava);
 		/// <summary>
 		/// Calls ModItem.CanBurnInLava.
 		/// </summary>
-		public static bool? CanBurnInLava(Item item)
-		{
-			bool? canBurnInLava = null;
-			foreach (var g in HookCanBurnInLava.Enumerate(item.globalItems)) {
-				switch (g.CanBurnInLava(item)) {
-					case null:
-						continue;
-					case false:
-						canBurnInLava = false;
-						continue;
-					case true:
-						return true;
-				}
-			}
+		public static readonly HookList<GlobalItem, Func<Item, bool?>> CanBurnInLava = AddHook(new HookList<GlobalItem, Func<Item, bool?>>(
+			//Method reference
+			typeof(GlobalItem).GetMethod(nameof(GlobalItem.CanBurnInLava)),
+			//Invocation
+			e => (Item item) => {
+				bool? canBurnInLava = null;
 
-			return canBurnInLava ?? item.ModItem?.CanBurnInLava();
-		}
-		
-		private static HookList HookPostUpdate = AddHook<Action<Item>>(g => g.PostUpdate);
+				foreach (var g in e.Enumerate(item.globalItems)) {
+					switch (g.CanBurnInLava(item)) {
+						case null:
+							continue;
+						case false:
+							canBurnInLava = false;
+							continue;
+						case true:
+							return true;
+					}
+				}
+
+				return canBurnInLava ?? item.ModItem?.CanBurnInLava();
+			}
+		));
+
 		/// <summary>
 		/// Calls ModItem.PostUpdate and all GlobalItem.PostUpdate hooks.
 		/// </summary>
-		public static void PostUpdate(Item item) {
-			item.ModItem?.PostUpdate();
+		public static readonly HookList<GlobalItem, Action<Item>> PostUpdate = AddHook(
+			new HookList<GlobalItem, Action<Item>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.PostUpdate)),
+				//Invocation
+				e => (Item item) => {
+					item.ModItem?.PostUpdate();
 
-			foreach (var g in HookPostUpdate.Enumerate(item.globalItems)) {
-				g.PostUpdate(item);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostUpdate(item);
+					}
+				}
+			)
+		);
 
-		private delegate void DelegateGrabRange(Item item, Player player, ref int grabRange);
-		private static HookList HookGrabRange = AddHook<DelegateGrabRange>(g => g.GrabRange);
-		//in Terraria.Player.GrabItems after increasing grab range add
-		//  ItemLoader.GrabRange(Main.item[j], this, ref num);
+		public delegate void DelegateGrabRange(Item item, Player player, ref int grabRange);
+
 		/// <summary>
 		/// Calls ModItem.GrabRange, then all GlobalItem.GrabRange hooks.
 		/// </summary>
-		public static void GrabRange(Item item, Player player, ref int grabRange) {
-			item.ModItem?.GrabRange(player, ref grabRange);
+		public static readonly HookList<GlobalItem, DelegateGrabRange> GrabRange = AddHook(
+			new HookList<GlobalItem, DelegateGrabRange>(
+				//Method reference
+				g => g.GrabRange,
+				//Invocation
+				e => (Item item, Player player, ref int grabRange) => {
+					item.ModItem?.GrabRange(player, ref grabRange);
 
-			foreach (var g in HookGrabRange.Enumerate(item.globalItems)) {
-				g.GrabRange(item, player, ref grabRange);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.GrabRange(item, player, ref grabRange);
+					}
+				}
+			)
+		);
 
-		private static HookList HookGrabStyle = AddHook<Func<Item, Player, bool>>(g => g.GrabStyle);
-		//in Terraria.Player.GrabItems between setting beingGrabbed to true and grab styles add
-		//  if(ItemLoader.GrabStyle(Main.item[j], this)) { } else
 		/// <summary>
 		/// Calls all GlobalItem.GrabStyle hooks then ModItem.GrabStyle, until one of them returns true. Returns whether any of the hooks returned true.
 		/// </summary>
-		public static bool GrabStyle(Item item, Player player) {
-			foreach (var g in HookGrabStyle.Enumerate(item.globalItems)) {
-				if (g.GrabStyle(item, player))
-					return true;
-			}
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> GrabStyle = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.GrabStyle,
+				//Invocation
+				e => (Item item, Player player) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (g.GrabStyle(item, player))
+							return true;
+					}
 
-			return item.ModItem != null && item.ModItem.GrabStyle(player);
-		}
+					return item.ModItem != null && item.ModItem.GrabStyle(player);
+				}
+			)
+		);
 
-		private static HookList HookCanPickup = AddHook<Func<Item, Player, bool>>(g => g.CanPickup);
-		//in Terraria.Player.GrabItems first per item if statement add
-		//  && ItemLoader.CanPickup(Main.item[j], this)
-		public static bool CanPickup(Item item, Player player) {
-			foreach (var g in HookCanPickup.Enumerate(item.globalItems)) {
-				if (!g.CanPickup(item, player))
-					return false;
-			}
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> CanPickup = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.CanPickup,
+				//Invocation
+				e => (Item item, Player player) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (!g.CanPickup(item, player))
+							return false;
+					}
 
-			return item.ModItem?.CanPickup(player) ?? true;
-		}
+					return item.ModItem?.CanPickup(player) ?? true;
+				}
+			)
+		);
 
-		private static HookList HookOnPickup = AddHook<Func<Item, Player, bool>>(g => g.OnPickup);
-		//in Terraria.Player.GrabItems before special pickup effects add
-		//  if(!ItemLoader.OnPickup(Main.item[j], this)) { Main.item[j] = new Item(); continue; }
 		/// <summary>
 		/// Calls all GlobalItem.OnPickup hooks then ModItem.OnPickup, until one of the returns false. Returns true if all of the hooks return true.
 		/// </summary>
-		public static bool OnPickup(Item item, Player player) {
-			foreach (var g in HookOnPickup.Enumerate(item.globalItems)) {
-				if (!g.OnPickup(item, player))
-					return false;
-			}
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> OnPickup = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.OnPickup,
+				//Invocation
+				e => (Item item, Player player) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (!g.OnPickup(item, player))
+							return false;
+					}
 
-			return item.ModItem?.OnPickup(player) ?? true;
-		}
+					return item.ModItem?.OnPickup(player) ?? true;
+				}
+			)
+		);
 
-		private static HookList HookItemSpace = AddHook<Func<Item, Player, bool>>(g => g.ItemSpace);
-		//in Terraria.Player.GrabItems before grab effect
-		//  (this.ItemSpace(Main.item[j]) || ItemLoader.ExtraPickupSpace(Main.item[j], this)
-		public static bool ItemSpace(Item item, Player player) {
-			foreach (var g in HookItemSpace.Enumerate(item.globalItems)) {
-				if (g.ItemSpace(item, player))
-					return true;
-			}
+		public static readonly HookList<GlobalItem, Func<Item, Player, bool>> ItemSpace = AddHook(
+			new HookList<GlobalItem, Func<Item, Player, bool>>(
+				//Method reference
+				g => g.ItemSpace,
+				//Invocation
+				e => (Item item, Player player) => {
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (g.ItemSpace(item, player))
+							return true;
+					}
 
-			return item.ModItem?.ItemSpace(player) ?? false;
-		}
+					return item.ModItem?.ItemSpace(player) ?? false;
+				}
+			)
+		);
 
-		private static HookList HookGetAlpha = AddHook<Func<Item, Color, Color?>>(g => g.GetAlpha);
-		//in Terraria.UI.ItemSlot.GetItemLight remove type too high check
-		//in beginning of Terraria.Item.GetAlpha call
-		//  Color? modColor = ItemLoader.GetAlpha(this, newColor);
-		//  if(modColor.HasValue) { return modColor.Value; }
 		/// <summary>
 		/// Calls all GlobalItem.GetAlpha hooks then ModItem.GetAlpha, until one of them returns a color, and returns that color. Returns null if all of the hooks return null.
 		/// </summary>
-		public static Color? GetAlpha(Item item, Color lightColor) {
-			if (item.IsAir)
-				return null;
+		public static readonly HookList<GlobalItem, Func<Item, Color, Color?>> GetAlpha = AddHook(
+			new HookList<GlobalItem, Func<Item, Color, Color?>>(
+				//Method reference
+				g => g.GetAlpha,
+				//Invocation
+				e => (Item item, Color lightColor) => {
+					if (item.IsAir)
+						return null;
 
-			foreach (var g in HookGetAlpha.Enumerate(item.globalItems)) {
-				Color? color = g.GetAlpha(item, lightColor);
-				if (color.HasValue)
-					return color;
-			}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						Color? color = g.GetAlpha(item, lightColor);
 
-			return item.ModItem?.GetAlpha(lightColor);
-		}
+						if (color.HasValue)
+							return color;
+					}
 
-		private delegate bool DelegatePreDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI);
-		private static HookList HookPreDrawInWorld = AddHook<DelegatePreDrawInWorld>(g => g.PreDrawInWorld);
+					return item.ModItem?.GetAlpha(lightColor);
+				}
+			)
+		);
+
+		public delegate bool DelegatePreDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI);
 
 		/// <summary>
 		/// Returns the "and" operator on the results of ModItem.PreDrawInWorld and all GlobalItem.PreDrawInWorld hooks.
 		/// </summary>
-		public static bool PreDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI) {
-			bool flag = true;
-			if (item.ModItem != null)
-				flag &= item.ModItem.PreDrawInWorld(spriteBatch, lightColor, alphaColor, ref rotation, ref scale, whoAmI);
+		public static readonly HookList<GlobalItem, DelegatePreDrawInWorld> PreDrawInWorld = AddHook(
+			new HookList<GlobalItem, DelegatePreDrawInWorld>(
+				//Method reference
+				g => g.PreDrawInWorld,
+				//Invocation
+				e => (Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI) => {
+					bool flag = true;
 
-			foreach (var g in HookPreDrawInWorld.Enumerate(item.globalItems)) {
-				flag &= g.PreDrawInWorld(item, spriteBatch, lightColor, alphaColor, ref rotation, ref scale, whoAmI);
-			}
+					if (item.ModItem != null)
+						flag &= item.ModItem.PreDrawInWorld(spriteBatch, lightColor, alphaColor, ref rotation, ref scale, whoAmI);
 
-			return flag;
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						flag &= g.PreDrawInWorld(item, spriteBatch, lightColor, alphaColor, ref rotation, ref scale, whoAmI);
+					}
 
-		private static HookList HookPostDrawInWorld = AddHook<Action<Item, SpriteBatch, Color, Color, float, float, int>>(g => g.PostDrawInWorld);
-		//in Terraria.Main.DrawItem before every return (including for PreDrawInWorld) and at end of method call
-		//  ItemLoader.PostDrawInWorld(item, Main.spriteBatch, color, alpha, rotation, scale)
+					return flag;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.PostDrawInWorld, then all GlobalItem.PostDrawInWorld hooks.
 		/// </summary>
-		public static void PostDrawInWorld(Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, float rotation, float scale, int whoAmI) {
-			item.ModItem?.PostDrawInWorld(spriteBatch, lightColor, alphaColor, rotation, scale, whoAmI);
+		public static readonly HookList<GlobalItem, Action<Item, SpriteBatch, Color, Color, float, float, int>> PostDrawInWorld = AddHook(
+			new HookList<GlobalItem, Action<Item, SpriteBatch, Color, Color, float, float, int>>(
+				//Method reference
+				g => g.PostDrawInWorld,
+				//Invocation
+				e => (Item item, SpriteBatch spriteBatch, Color lightColor, Color alphaColor, float rotation, float scale, int whoAmI) => {
+					item.ModItem?.PostDrawInWorld(spriteBatch, lightColor, alphaColor, rotation, scale, whoAmI);
 
-			foreach (var g in HookPostDrawInWorld.Enumerate(item.globalItems)) {
-				g.PostDrawInWorld(item, spriteBatch, lightColor, alphaColor, rotation, scale, whoAmI);
-			}
-		}
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostDrawInWorld(item, spriteBatch, lightColor, alphaColor, rotation, scale, whoAmI);
+					}
+				}
+			)
+		);
 
-		private static HookList HookPreDrawInInventory = AddHook<Func<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float, bool>>(g => g.PreDrawInInventory);
-		//in Terraria.UI.ItemSlot.Draw place item-drawing code inside if statement
-		//  if(ItemLoader.PreDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
-		//    item.GetColor(color), origin, num4 * num3))
 		/// <summary>
 		/// Returns the "and" operator on the results of all GlobalItem.PreDrawInInventory hooks and ModItem.PreDrawInInventory.
 		/// </summary>
-		public static bool PreDrawInInventory(Item item, SpriteBatch spriteBatch, Vector2 position, Rectangle frame,
-			Color drawColor, Color itemColor, Vector2 origin, float scale) {
-			bool flag = true;
-			foreach (var g in HookPreDrawInInventory.Enumerate(item.globalItems)) {
-				flag &= g.PreDrawInInventory(item, spriteBatch, position, frame, drawColor, itemColor, origin, scale);
-			}
+		public static readonly HookList<GlobalItem, Func<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float, bool>> PreDrawInInventory = AddHook(
+			new HookList<GlobalItem, Func<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float, bool>>(
+				//Method reference
+				g => g.PreDrawInInventory,
+				//Invocation
+				e => (Item item, SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale) => {
+					bool flag = true;
 
-			if (item.ModItem != null)
-				flag &= item.ModItem.PreDrawInInventory(spriteBatch, position, frame, drawColor, itemColor, origin, scale);
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						flag &= g.PreDrawInInventory(item, spriteBatch, position, frame, drawColor, itemColor, origin, scale);
+					}
 
-			return flag;
-		}
+					if (item.ModItem != null)
+						flag &= item.ModItem.PreDrawInInventory(spriteBatch, position, frame, drawColor, itemColor, origin, scale);
 
-		private static HookList HookPostDrawInInventory = AddHook<Action<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float>>(g => g.PostDrawInInventory);
-		//in Terraria.UI.ItemSlot.Draw after if statement for PreDrawInInventory call
-		//  ItemLoader.PostDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
-		//    item.GetColor(color), origin, num4 * num3);
+					return flag;
+				}
+			)
+		);
+
 		/// <summary>
 		/// Calls ModItem.PostDrawInInventory, then all GlobalItem.PostDrawInInventory hooks.
 		/// </summary>
-		public static void PostDrawInInventory(Item item, SpriteBatch spriteBatch, Vector2 position, Rectangle frame,
-			Color drawColor, Color itemColor, Vector2 origin, float scale) {
-			item.ModItem?.PostDrawInInventory(spriteBatch, position, frame, drawColor, itemColor, origin, scale);
+		public static readonly HookList<GlobalItem, Action<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float>> PostDrawInInventory = AddHook(
+			new HookList<GlobalItem, Action<Item, SpriteBatch, Vector2, Rectangle, Color, Color, Vector2, float>>(
+				//Method reference
+				g => g.PostDrawInInventory,
+				//Invocation
+				e => (Item item, SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale) => {
+					item.ModItem?.PostDrawInInventory(spriteBatch, position, frame, drawColor, itemColor, origin, scale);
 
-			foreach (var g in HookPostDrawInInventory.Enumerate(item.globalItems)) {
-				g.PostDrawInInventory(item, spriteBatch, position, frame, drawColor, itemColor, origin, scale);
-			}
-		}
-
-		private static HookList HookHoldoutOffset = AddHook<Func<int, Vector2?>>(g => g.HoldoutOffset);
-		public static void HoldoutOffset(float gravDir, int type, ref Vector2 offset) {
-			ModItem modItem = GetItem(type);
-
-			if (modItem != null) {
-				Vector2? modOffset = modItem.HoldoutOffset();
-
-				if (modOffset.HasValue) {
-					offset.X = modOffset.Value.X;
-					offset.Y += gravDir * modOffset.Value.Y;
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostDrawInInventory(item, spriteBatch, position, frame, drawColor, itemColor, origin, scale);
+					}
 				}
-			}
+			)
+		);
 
-			foreach (var g in HookHoldoutOffset.Enumerate(globalItemsArray)) {
-				Vector2? modOffset = g.HoldoutOffset(type);
+		public delegate void DelegateHoldoutOfffset(float gravDir, int type, ref Vector2 offset);
 
-				if (modOffset.HasValue) {
-					offset.X = modOffset.Value.X;
-					offset.Y = TextureAssets.Item[type].Value.Height / 2f + gravDir * modOffset.Value.Y;
+		public static readonly HookList<GlobalItem, DelegateHoldoutOfffset> HoldoutOffset = AddHook(
+			new HookList<GlobalItem, DelegateHoldoutOfffset>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.HoldoutOffset)),
+				//Invocation
+				e => (float gravDir, int type, ref Vector2 offset) => {
+					ModItem modItem = GetItem(type);
+
+					if (modItem != null) {
+						Vector2? modOffset = modItem.HoldoutOffset();
+
+						if (modOffset.HasValue) {
+							offset.X = modOffset.Value.X;
+							offset.Y += gravDir * modOffset.Value.Y;
+						}
+					}
+
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						Vector2? modOffset = g.HoldoutOffset(type);
+
+						if (modOffset.HasValue) {
+							offset.X = modOffset.Value.X;
+							offset.Y = TextureAssets.Item[type].Value.Height / 2f + gravDir * modOffset.Value.Y;
+						}
+					}
 				}
-			}
-		}
+			)
+		);
 
-		private static HookList HookHoldoutOrigin = AddHook<Func<int, Vector2?>>(g => g.HoldoutOrigin);
-		public static void HoldoutOrigin(Player player, ref Vector2 origin) {
-			Item item = player.inventory[player.selectedItem];
-			Vector2 modOrigin = Vector2.Zero;
-			if (item.ModItem != null) {
-				Vector2? modOrigin2 = item.ModItem.HoldoutOrigin();
-				if (modOrigin2.HasValue) {
-					modOrigin = modOrigin2.Value;
+		public delegate void DelegateHoldoutOrigin(Player player, ref Vector2 origin);
+
+		public static readonly HookList<GlobalItem, DelegateHoldoutOrigin> HoldoutOrigin = AddHook(
+			new HookList<GlobalItem, DelegateHoldoutOrigin>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.HoldoutOrigin)),
+				//Invocation
+				e => (Player player, ref Vector2 origin) => {
+					Item item = player.inventory[player.selectedItem];
+					Vector2 modOrigin = Vector2.Zero;
+
+					if (item.ModItem != null) {
+						Vector2? modOrigin2 = item.ModItem.HoldoutOrigin();
+
+						if (modOrigin2.HasValue) {
+							modOrigin = modOrigin2.Value;
+						}
+					}
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						Vector2? modOrigin2 = g.HoldoutOrigin(item.type);
+
+						if (modOrigin2.HasValue) {
+							modOrigin = modOrigin2.Value;
+						}
+					}
+
+					modOrigin.X *= player.direction;
+					modOrigin.Y *= -player.gravDir;
+					origin += modOrigin;
 				}
-			}
-			foreach (var g in HookHoldoutOrigin.Enumerate(item.globalItems)) {
-				Vector2? modOrigin2 = g.HoldoutOrigin(item.type);
-				if (modOrigin2.HasValue) {
-					modOrigin = modOrigin2.Value;
+			)
+		);
+
+		public static readonly HookList<GlobalItem, Func<Item, int, bool>> CanEquipAccessory = AddHook(
+			new HookList<GlobalItem, Func<Item, int, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.CanEquipAccessory)),
+				//Invocation
+				e => (Item item, int slot) => {
+					Player player = Main.player[Main.myPlayer];
+
+					if (item.ModItem != null && !item.ModItem.CanEquipAccessory(player, slot))
+						return false;
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						if (!g.CanEquipAccessory(item, player, slot))
+							return false;
+					}
+
+					return true;
 				}
-			}
-			modOrigin.X *= player.direction;
-			modOrigin.Y *= -player.gravDir;
-			origin += modOrigin;
-		}
+			)
+		);
 
-		private static HookList HookCanEquipAccessory = AddHook<Func<Item, Player, int, bool>>(g => g.CanEquipAccessory);
-		//in Terraria.UI.ItemSlot.AccCheck replace 2nd and 3rd return false with
-		//  return !ItemLoader.CanEquipAccessory(item, slot)
-		public static bool CanEquipAccessory(Item item, int slot) {
-			Player player = Main.player[Main.myPlayer];
-			if (item.ModItem != null && !item.ModItem.CanEquipAccessory(player, slot))
-				return false;
+		public delegate void DelegateExtractinatorUse(ref int resultType, ref int resultStack, int extractType);
 
-			foreach (var g in HookCanEquipAccessory.Enumerate(item.globalItems)) {
-				if (!g.CanEquipAccessory(item, player, slot))
-					return false;
-			}
+		public static readonly HookList<GlobalItem, DelegateExtractinatorUse> ExtractinatorUse = AddHook(
+			new HookList<GlobalItem, DelegateExtractinatorUse>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.ExtractinatorUse)),
+				//Invocation
+				e => (ref int resultType, ref int resultStack, int extractType) => {
+					GetItem(extractType)?.ExtractinatorUse(ref resultType, ref resultStack);
 
-			return true;
-		}
-
-		private delegate void DelegateExtractinatorUse(int extractType, ref int resultType, ref int resultStack);
-		private static HookList HookExtractinatorUse = AddHook<DelegateExtractinatorUse>(g => g.ExtractinatorUse);
-		public static void ExtractinatorUse(ref int resultType, ref int resultStack, int extractType) {
-			GetItem(extractType)?.ExtractinatorUse(ref resultType, ref resultStack);
-
-			foreach (var g in HookExtractinatorUse.Enumerate(globalItemsArray)) {
-				g.ExtractinatorUse(extractType, ref resultType, ref resultStack);
-			}
-		}
-
-		private delegate void DelegateCaughtFishStack(int type, ref int stack);
-		private static HookList HookCaughtFishStack = AddHook<DelegateCaughtFishStack>(g => g.CaughtFishStack);
-		public static void CaughtFishStack(Item item) {
-			item.ModItem?.CaughtFishStack(ref item.stack);
-
-			foreach (var g in HookCaughtFishStack.Enumerate(item.globalItems)) {
-				g.CaughtFishStack(item.type, ref item.stack);
-			}
-		}
-
-		private static HookList HookIsAnglerQuestAvailable = AddHook<Func<int, bool>>(g => g.IsAnglerQuestAvailable);
-		public static void IsAnglerQuestAvailable(int itemID, ref bool notAvailable) {
-			ModItem modItem = GetItem(itemID);
-			if (modItem != null)
-				notAvailable |= !modItem.IsAnglerQuestAvailable();
-
-			foreach (var g in HookIsAnglerQuestAvailable.Enumerate(globalItemsArray)) {
-				notAvailable |= !g.IsAnglerQuestAvailable(itemID);
-			}
-		}
-
-		private delegate void DelegateAnglerChat(int type, ref string chat, ref string catchLocation);
-		private static HookList HookAnglerChat = AddHook<DelegateAnglerChat>(g => g.AnglerChat);
-		public static string AnglerChat(int type) {
-			string chat = "";
-			string catchLocation = "";
-			GetItem(type)?.AnglerQuestChat(ref chat, ref catchLocation);
-
-			foreach (var g in HookAnglerChat.Enumerate(globalItemsArray)) {
-				g.AnglerChat(type, ref chat, ref catchLocation);
-			}
-
-			if (string.IsNullOrEmpty(chat) || string.IsNullOrEmpty(catchLocation))
-				return null;
-
-			return chat + "\n\n(" + catchLocation + ")";
-		}
-
-		private delegate bool DelegatePreDrawTooltip(Item item, ReadOnlyCollection<TooltipLine> lines, ref int x, ref int y);
-		private static HookList HookPreDrawTooltip = AddHook<DelegatePreDrawTooltip>(g => g.PreDrawTooltip);
-		public static bool PreDrawTooltip(Item item, ReadOnlyCollection<TooltipLine> lines, ref int x, ref int y) {
-			bool modItemPreDraw = item.ModItem?.PreDrawTooltip(lines, ref x, ref y) ?? true;
-			List<bool> globalItemPreDraw = new List<bool>();
-			
-			foreach (var g in HookPreDrawTooltip.Enumerate(item.globalItems)) {
-				globalItemPreDraw.Add(g.PreDrawTooltip(item, lines, ref x, ref y));
-			}
-
-			return modItemPreDraw && globalItemPreDraw.All(z => z);
-		}
-
-		private delegate void DelegatePostDrawTooltip(Item item, ReadOnlyCollection<DrawableTooltipLine> lines);
-		private static HookList HookPostDrawTooltip = AddHook<DelegatePostDrawTooltip>(g => g.PostDrawTooltip);
-		public static void PostDrawTooltip(Item item, ReadOnlyCollection<DrawableTooltipLine> lines) {
-			item.ModItem?.PostDrawTooltip(lines);
-
-			foreach (var g in HookPostDrawTooltip.Enumerate(item.globalItems)) {
-				g.PostDrawTooltip(item, lines);
-			}
-		}
-
-		private delegate bool DelegatePreDrawTooltipLine(Item item, DrawableTooltipLine line, ref int yOffset);
-		private static HookList HookPreDrawTooltipLine = AddHook<DelegatePreDrawTooltipLine>(g => g.PreDrawTooltipLine);
-		public static bool PreDrawTooltipLine(Item item, DrawableTooltipLine line, ref int yOffset) {
-			bool modItemPreDrawLine = item.ModItem?.PreDrawTooltipLine(line, ref yOffset) ?? true;
-			List<bool> globalItemPreDrawLine = new List<bool>();
-
-			foreach (var g in HookPreDrawTooltipLine.Enumerate(item.globalItems)) {
-				globalItemPreDrawLine.Add(g.PreDrawTooltipLine(item, line, ref yOffset));
-			}
-			
-			return modItemPreDrawLine && globalItemPreDrawLine.All(x => x);
-		}
-
-		private delegate void DelegatePostDrawTooltipLine(Item item, DrawableTooltipLine line);
-		private static HookList HookPostDrawTooltipLine = AddHook<DelegatePostDrawTooltipLine>(g => g.PostDrawTooltipLine);
-		public static void PostDrawTooltipLine(Item item, DrawableTooltipLine line) {
-			item.ModItem?.PostDrawTooltipLine(line);
-
-			foreach (var g in HookPostDrawTooltipLine.Enumerate(item.globalItems)) {
-				g.PostDrawTooltipLine(item, line);
-			}
-		}
-
-		private static HookList HookModifyTooltips = AddHook<Action<Item, List<TooltipLine>>>(g => g.ModifyTooltips);
-		public static List<TooltipLine> ModifyTooltips(Item item, ref int numTooltips, string[] names, ref string[] text,
-			ref bool[] modifier, ref bool[] badModifier, ref int oneDropLogo, out Color?[] overrideColor) {
-			List<TooltipLine> tooltips = new List<TooltipLine>();
-			for (int k = 0; k < numTooltips; k++) {
-				TooltipLine tooltip = new TooltipLine(names[k], text[k]);
-				tooltip.isModifier = modifier[k];
-				tooltip.isModifierBad = badModifier[k];
-				if (k == oneDropLogo) {
-					tooltip.oneDropLogo = true;
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.ExtractinatorUse(extractType, ref resultType, ref resultStack);
+					}
 				}
-				tooltips.Add(tooltip);
-			}
-			
-			item.ModItem?.ModifyTooltips(tooltips);
+			)
+		);
 
-			foreach (var g in HookModifyTooltips.Enumerate(item.globalItems)) {
-				g.ModifyTooltips(item, tooltips);
-			}
+		public delegate void DelegateCaughtFishStack(int type, ref int stack);
 
-			numTooltips = tooltips.Count;
-			text = new string[numTooltips];
-			modifier = new bool[numTooltips];
-			badModifier = new bool[numTooltips];
-			oneDropLogo = -1;
-			overrideColor = new Color?[numTooltips];
-			for (int k = 0; k < numTooltips; k++) {
-				text[k] = tooltips[k].text;
-				modifier[k] = tooltips[k].isModifier;
-				badModifier[k] = tooltips[k].isModifierBad;
-				if (tooltips[k].oneDropLogo) {
-					oneDropLogo = k;
+		public static readonly HookList<GlobalItem, Action<Item>> CaughtFishStack = AddHook(
+			new HookList<GlobalItem, Action<Item>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.CaughtFishStack)),
+				//Invocation
+				e => (Item item) => {
+					item.ModItem?.CaughtFishStack(ref item.stack);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.CaughtFishStack(item.type, ref item.stack);
+					}
 				}
-				overrideColor[k] = tooltips[k].overrideColor;
-			}
+			)
+		);
 
-			return tooltips;
-		}
+		public delegate void DelegateIsAnglerQuestAvailable(int itemID, ref bool notAvailable);
 
-		private static HookList HookNeedsSaving = AddHook<Func<Item, bool>>(g => g.NeedsSaving);
-		public static bool NeedsModSaving(Item item) {
-			return item.type != 0 && (item.ModItem != null || item.prefix >= PrefixID.Count || HookNeedsSaving.Enumerate(item.globalItems).Count(g => g.NeedsSaving(item)) > 0);
-		}
+		public static readonly HookList<GlobalItem, DelegateIsAnglerQuestAvailable> IsAnglerQuestAvailable = AddHook(
+			new HookList<GlobalItem, DelegateIsAnglerQuestAvailable>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.IsAnglerQuestAvailable)),
+				//Invocation
+				e => (int itemID, ref bool notAvailable) => {
+					ModItem modItem = GetItem(itemID);
+					if (modItem != null)
+						notAvailable |= !modItem.IsAnglerQuestAvailable();
+
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						notAvailable |= !g.IsAnglerQuestAvailable(itemID);
+					}
+				}
+			)
+		);
+
+		public static readonly HookList<GlobalItem, Func<int, string>> AnglerChat = AddHook(
+			new HookList<GlobalItem, Func<int, string>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.AnglerChat)),
+				//Invocation
+				e => (int type) => {
+					string chat = "";
+					string catchLocation = "";
+
+					GetItem(type)?.AnglerQuestChat(ref chat, ref catchLocation);
+
+					foreach (var g in e.Enumerate(globalItemsArray)) {
+						g.AnglerChat(type, ref chat, ref catchLocation);
+					}
+
+					if (string.IsNullOrEmpty(chat) || string.IsNullOrEmpty(catchLocation))
+						return null;
+
+					return chat + "\n\n(" + catchLocation + ")";
+				}
+			)
+		);
+
+		public delegate bool DelegatePreDrawTooltip(Item item, ReadOnlyCollection<TooltipLine> lines, ref int x, ref int y);
+		public static readonly HookList<GlobalItem, DelegatePreDrawTooltip> PreDrawTooltip = AddHook(
+			new HookList<GlobalItem, DelegatePreDrawTooltip>(
+				//Method reference
+				g => g.PreDrawTooltip,
+				//Invocation
+				e => (Item item, ReadOnlyCollection<TooltipLine> lines, ref int x, ref int y) => {
+					bool modItemPreDraw = item.ModItem?.PreDrawTooltip(lines, ref x, ref y) ?? true;
+					var globalItemPreDraw = new List<bool>();
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						globalItemPreDraw.Add(g.PreDrawTooltip(item, lines, ref x, ref y));
+					}
+
+					return modItemPreDraw && globalItemPreDraw.All(z => z);
+				}
+			)
+		);
+
+		public delegate void DelegatePostDrawTooltip(Item item, ReadOnlyCollection<DrawableTooltipLine> lines);
+		public static readonly HookList<GlobalItem, DelegatePostDrawTooltip> PostDrawTooltip = AddHook(
+			new HookList<GlobalItem, DelegatePostDrawTooltip>(
+				//Method reference
+				g => g.PostDrawTooltip,
+				//Invocation
+				e => (Item item, ReadOnlyCollection<DrawableTooltipLine> lines) => {
+					item.ModItem?.PostDrawTooltip(lines);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostDrawTooltip(item, lines);
+					}
+				}
+			)
+		);
+
+		public delegate bool DelegatePreDrawTooltipLine(Item item, DrawableTooltipLine line, ref int yOffset);
+		public static readonly HookList<GlobalItem, DelegatePreDrawTooltipLine> PreDrawTooltipLine = AddHook(
+			new HookList<GlobalItem, DelegatePreDrawTooltipLine>(
+				//Method reference
+				g => g.PreDrawTooltipLine,
+				//Invocation
+				e => (Item item, DrawableTooltipLine line, ref int yOffset) => {
+					bool modItemPreDrawLine = item.ModItem?.PreDrawTooltipLine(line, ref yOffset) ?? true;
+					var globalItemPreDrawLine = new List<bool>();
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						globalItemPreDrawLine.Add(g.PreDrawTooltipLine(item, line, ref yOffset));
+					}
+
+					return modItemPreDrawLine && globalItemPreDrawLine.All(x => x);
+				}
+			)
+		);
+
+		public delegate void DelegatePostDrawTooltipLine(Item item, DrawableTooltipLine line);
+		public static readonly HookList<GlobalItem, DelegatePostDrawTooltipLine> PostDrawTooltipLine = AddHook(
+			new HookList<GlobalItem, DelegatePostDrawTooltipLine>(
+				//Method reference
+				g => g.PostDrawTooltipLine,
+				//Invocation
+				e => (Item item, DrawableTooltipLine line) => {
+					item.ModItem?.PostDrawTooltipLine(line);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.PostDrawTooltipLine(item, line);
+					}
+				}
+			)
+		);
+
+		public delegate List<TooltipLine> DelegateModifyTooltips(Item item, ref int numTooltips, string[] names, ref string[] text, ref bool[] modifier, ref bool[] badModifier, ref int oneDropLogo, out Color?[] overrideColor);
+
+		public static readonly HookList<GlobalItem, DelegateModifyTooltips> ModifyTooltips = AddHook(
+			new HookList<GlobalItem, DelegateModifyTooltips>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.ModifyTooltips)),
+				//Invocation
+				e => (Item item, ref int numTooltips, string[] names, ref string[] text, ref bool[] modifier, ref bool[] badModifier, ref int oneDropLogo, out Color?[] overrideColor) => {
+					var tooltips = new List<TooltipLine>();
+
+					for (int k = 0; k < numTooltips; k++) {
+						var tooltip = new TooltipLine(names[k], text[k]) {
+							isModifier = modifier[k],
+							isModifierBad = badModifier[k]
+						};
+
+						if (k == oneDropLogo) {
+							tooltip.oneDropLogo = true;
+						}
+
+						tooltips.Add(tooltip);
+					}
+
+					item.ModItem?.ModifyTooltips(tooltips);
+
+					foreach (var g in e.Enumerate(item.globalItems)) {
+						g.ModifyTooltips(item, tooltips);
+					}
+
+					numTooltips = tooltips.Count;
+					text = new string[numTooltips];
+					modifier = new bool[numTooltips];
+					badModifier = new bool[numTooltips];
+					oneDropLogo = -1;
+					overrideColor = new Color?[numTooltips];
+
+					for (int k = 0; k < numTooltips; k++) {
+						text[k] = tooltips[k].text;
+						modifier[k] = tooltips[k].isModifier;
+						badModifier[k] = tooltips[k].isModifierBad;
+
+						if (tooltips[k].oneDropLogo) {
+							oneDropLogo = k;
+						}
+
+						overrideColor[k] = tooltips[k].overrideColor;
+					}
+
+					return tooltips;
+				}
+			)
+		);
+
+		public static readonly HookList<GlobalItem, Func<Item, bool>> NeedsModSaving = AddHook(
+			new HookList<GlobalItem, Func<Item, bool>>(
+				//Method reference
+				typeof(GlobalItem).GetMethod(nameof(GlobalItem.NeedsSaving)),
+				//Invocation
+				e => (Item item) => {
+					return item.type != 0 && (item.ModItem != null || item.prefix >= PrefixID.Count || e.Enumerate(item.globalItems).Count(g => g.NeedsSaving(item)) > 0);
+				}
+			)
+		);
 
 		internal static void WriteNetGlobalOrder(BinaryWriter w) {
 			w.Write((short)NetGlobals.Length);
+
 			foreach (var globalItem in NetGlobals) {
 				w.Write(globalItem.Mod.netID);
 				w.Write(globalItem.Name);
@@ -1808,7 +2315,9 @@ namespace Terraria.ModLoader
 
 		internal static void ReadNetGlobalOrder(BinaryReader r) {
 			short n = r.ReadInt16();
+
 			NetGlobals = new GlobalItem[n];
+
 			for (short i = 0; i < n; i++)
 				NetGlobals[i] = ModContent.Find<GlobalItem>(ModNet.GetMod(r.ReadInt16()).Name, r.ReadString());
 		}
@@ -1820,27 +2329,39 @@ namespace Terraria.ModLoader
 		internal static void VerifyGlobalItem(GlobalItem item) {
 			var type = item.GetType();
 			int saveMethods = 0;
-			if (HasMethod(type, "NeedsSaving", typeof(Item))) saveMethods++;
-			if (HasMethod(type, "Save", typeof(Item))) saveMethods++;
-			if (HasMethod(type, "Load", typeof(Item), typeof(TagCompound))) saveMethods++;
+
+			if (HasMethod(type, nameof(GlobalItem.NeedsSaving), typeof(Item)))
+				saveMethods++;
+
+			if (HasMethod(type, nameof(GlobalItem.Save), typeof(Item)))
+				saveMethods++;
+
+			if (HasMethod(type, nameof(GlobalItem.Load), typeof(Item), typeof(TagCompound)))
+				saveMethods++;
+
 			if (saveMethods > 0 && saveMethods < 3)
-				throw new Exception(type + " must override all of (NeedsSaving/Save/Load) or none");
+				throw new Exception($"{type} must override all of ({nameof(GlobalItem.NeedsSaving)}/{nameof(GlobalItem.Save)}/{nameof(GlobalItem.Load)}) or none.");
 
 			int netMethods = 0;
-			if (HasMethod(type, "NetSend", typeof(Item), typeof(BinaryWriter))) netMethods++;
-			if (HasMethod(type, "NetReceive", typeof(Item), typeof(BinaryReader))) netMethods++;
+
+			if (HasMethod(type, nameof(GlobalItem.NetSend), typeof(Item), typeof(BinaryWriter)))
+				netMethods++;
+
+			if (HasMethod(type, nameof(GlobalItem.NetReceive), typeof(Item), typeof(BinaryReader)))
+				netMethods++;
+
 			if (netMethods == 1)
-				throw new Exception(type + " must override both of (NetSend/NetReceive) or none");
+				throw new Exception($"{type} must override both of ({nameof(GlobalItem.NetSend)}/{nameof(GlobalItem.NetReceive)}) or none.");
 
 			bool hasInstanceFields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
 				.Any(f => f.DeclaringType.IsSubclassOf(typeof(GlobalItem)));
 
 			if (hasInstanceFields) {
 				if (!item.InstancePerEntity)
-					throw new Exception(type + " has instance fields but does not set InstancePerEntity to true. Either use static fields, or per instance globals");
+					throw new Exception($"{type} has instance fields but does not set InstancePerEntity to true. Either use static fields, or per instance globals");
 
 				if (!HasMethod(type, "Clone", typeof(Item), typeof(Item)))
-					throw new Exception(type + " has InstancePerEntity but does not override Clone(Item, Item)");
+					throw new Exception($"{type} has InstancePerEntity but does not override Clone(Item, Item)");
 			}
 		}
 	}

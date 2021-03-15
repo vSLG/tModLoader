@@ -259,7 +259,7 @@
  			}
  
  			result.X = num;
-+			ItemLoader.HoldoutOffset(gravdir, itemtype, ref result);
++			ItemLoader.HoldoutOffset.Invoke(gravdir, itemtype, ref result);
  			return result;
  		}
  
@@ -330,7 +330,7 @@
  				if ((num == 2476 || num == 2453 || num == 2473) && !flag)
  					flag2 = true;
 +
-+				ItemLoader.IsAnglerQuestAvailable(num, ref flag2);
++				ItemLoader.IsAnglerQuestAvailable.Invoke(num, ref flag2);
  			}
  
  			NetMessage.SendAnglerQuest(-1);
@@ -1354,7 +1354,7 @@
  			}
  
  			Vector2 zero = Vector2.Zero;
-+			List<TooltipLine> lines = ItemLoader.ModifyTooltips(HoverItem, ref numLines, tooltipNames, ref array, ref array2, ref array3, ref yoyoLogo, out Color?[] overrideColor);
++			List<TooltipLine> lines = ItemLoader.ModifyTooltips.Invoke(HoverItem, ref numLines, tooltipNames, ref array, ref array2, ref array3, ref yoyoLogo, out Color?[] overrideColor);
 +			List<DrawableTooltipLine> drawableLines = lines.Select((TooltipLine x, int i) => new DrawableTooltipLine(x, i, 0, 0, Color.White)).ToList();
  			int num12 = 0;
  			for (int j = 0; j < numLines; j++) {
@@ -1363,7 +1363,7 @@
  				Utils.DrawInvBG(spriteBatch, new Microsoft.Xna.Framework.Rectangle(X - num17, Y - num18, (int)zero.X + num17 * 2, (int)zero.Y + num18 + num18 / 2), new Microsoft.Xna.Framework.Color(23, 25, 81, 255) * 0.925f);
  			}
  
-+			bool globalCanDraw = ItemLoader.PreDrawTooltip(HoverItem, lines.AsReadOnly(), ref X, ref Y);
++			bool globalCanDraw = ItemLoader.PreDrawTooltip.Invoke(HoverItem, lines.AsReadOnly(), ref X, ref Y);
  			for (int k = 0; k < numLines; k++) {
 -				if (k == yoyoLogo) {
 -					float num19 = 1f;
@@ -1375,7 +1375,7 @@
 +					int num20 = (int)((float)(int)mouseTextColor * 1f);
 +					Color color2 = Color.Black;
 +					drawableLines[k].Color = new Color(num20, num20, num20, num20);
-+					if (!ItemLoader.PreDrawTooltipLine(HoverItem, drawableLines[k], ref num12) || !globalCanDraw)
++					if (!ItemLoader.PreDrawTooltipLine.Invoke(HoverItem, drawableLines[k], ref num12) || !globalCanDraw)
 +						goto PostDraw;
 +
  					for (int l = 0; l < 5; l++) {
@@ -1444,7 +1444,7 @@
 +						drawableLines[k].overrideColor = realLineColor;
 +					}
 +
-+					if (!ItemLoader.PreDrawTooltipLine(HoverItem, drawableLines[k], ref num12) || !globalCanDraw)
++					if (!ItemLoader.PreDrawTooltipLine.Invoke(HoverItem, drawableLines[k], ref num12) || !globalCanDraw)
 +						goto PostDraw;
 +
 -					ChatManager.DrawColorCodedStringWithShadow(spriteBatch, FontAssets.MouseText.Value, array[k], new Vector2(X, Y + num16), black, 0f, Vector2.Zero, Vector2.One);
@@ -1452,7 +1452,7 @@
  				}
 +
 +				PostDraw:
-+				ItemLoader.PostDrawTooltipLine(HoverItem, drawableLines[k]);
++				ItemLoader.PostDrawTooltipLine.Invoke(HoverItem, drawableLines[k]);
  
  				num16 += (int)(FontAssets.MouseText.Value.MeasureString(array[k]).Y + (float)num12);
  			}
@@ -2242,7 +2242,7 @@
  			Microsoft.Xna.Framework.Color color = Lighting.GetColor(item.Center.ToTileCoordinates());
  			Microsoft.Xna.Framework.Color currentColor = item.GetAlpha(color);
  			ItemSlot.GetItemLight(ref currentColor, ref scale, item);
-+			if (!ItemLoader.PreDrawInWorld(item, spriteBatch, color, currentColor, ref num, ref scale, whoami)) {
++			if (!ItemLoader.PreDrawInWorld.Invoke(item, spriteBatch, color, currentColor, ref num, ref scale, whoami)) {
 +				goto PostDraw;
 +			}
  			int num2 = item.glowMask;
@@ -2272,7 +2272,7 @@
  				spriteBatch.Draw(TextureAssets.GlowMask[233].Value, vector2, glowmaskFrame, new Microsoft.Xna.Framework.Color(255, 255, 255, 63) * 0.75f, num, glowmaskFrame.Size() / 2f, scale, SpriteEffects.None, 0f);
 +
 +			PostDraw:
-+			ItemLoader.PostDrawInWorld(item, spriteBatch, color, currentColor, num, scale, whoami);
++			ItemLoader.PostDrawInWorld.Invoke(item, spriteBatch, color, currentColor, num, scale, whoami);
  		}
  
  		public void DrawItems() {
@@ -2437,7 +2437,7 @@
  						int num58 = reforgeItem.value;
 -						if (player[myPlayer].discount)
 +						bool canApplyDiscount = true;
-+						if (!ItemLoader.ReforgePrice(reforgeItem, ref num58, ref canApplyDiscount))
++						if (!ItemLoader.ReforgePrice.Invoke(reforgeItem, ref num58, ref canApplyDiscount))
 +							goto skipVanillaPricing;
 +						
 +						if (canApplyDiscount && LocalPlayer.discount)
@@ -2455,7 +2455,7 @@
  							mouseReforge = true;
  							player[myPlayer].mouseInterface = true;
 -							if (mouseLeftRelease && mouseLeft && player[myPlayer].BuyItem(num58)) {
-+							if (mouseLeftRelease && mouseLeft && player[myPlayer].CanBuyItem(num58) && ItemLoader.PreReforge(reforgeItem)) {
++							if (mouseLeftRelease && mouseLeft && player[myPlayer].CanBuyItem(num58) && ItemLoader.PreReforge.Invoke(reforgeItem)) {
 +								player[myPlayer].BuyItem(num58);
  								bool favorited = reforgeItem.favorited;
 -								reforgeItem.netDefaults(reforgeItem.netID);
@@ -2473,7 +2473,7 @@
  								reforgeItem.position.Y = player[myPlayer].position.Y + (float)(player[myPlayer].height / 2) - (float)(reforgeItem.height / 2);
  								reforgeItem.favorited = favorited;
 +								reforgeItem.stack = stack;
-+								ItemLoader.PostReforge(reforgeItem);
++								ItemLoader.PostReforge.Invoke(reforgeItem);
  								PopupText.NewText(PopupTextContext.ItemReforge, reforgeItem, reforgeItem.stack, noStack: true);
  								SoundEngine.PlaySound(SoundID.Item37);
  							}
@@ -2558,7 +2558,7 @@
  			r.Create();
 -			if (mouseItem.type > 0 || r.createItem.type > 0)
 +			if (mouseItem.type > 0 || r.createItem.type > 0) {
-+				ItemLoader.OnCreate(mouseItem, new RecipeCreationContext {recipe = r});
++				ItemLoader.OnCreate.Invoke(mouseItem, new RecipeCreationContext {recipe = r});
 +				RecipeHooks.OnCraft(mouseItem, r);
  				SoundEngine.PlaySound(7);
 +			}

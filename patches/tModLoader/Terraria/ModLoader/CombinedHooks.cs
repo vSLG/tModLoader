@@ -5,38 +5,38 @@ namespace Terraria.ModLoader
 	public static class CombinedHooks
 	{
 		public static void ModifyWeaponDamage(Player player, Item item, ref StatModifier damage, ref float flat) {
-			ItemLoader.ModifyWeaponDamage(item, player, ref damage, ref flat);
+			ItemLoader.ModifyWeaponDamage.Invoke(item, player, ref damage, ref flat);
 			PlayerHooks.ModifyWeaponDamage(player, item, ref damage, ref flat);
 		}
 
 		public static void ModifyWeaponCrit(Player player, Item item, ref int crit) {
-			ItemLoader.ModifyWeaponCrit(item, player, ref crit);
+			ItemLoader.ModifyWeaponCrit.Invoke(item, player, ref crit);
 			PlayerHooks.ModifyWeaponCrit(player, item, ref crit);
 		}
 
 		public static void ModifyWeaponKnockback(Player player, Item item, ref StatModifier knockback, ref float flat) {
-			ItemLoader.ModifyWeaponKnockback(item, player, ref knockback, ref flat);
+			ItemLoader.ModifyWeaponKnockback.Invoke(item, player, ref knockback, ref flat);
 			PlayerHooks.ModifyWeaponKnockback(player, item, ref knockback, ref flat);
 		}
 
 		public static void ModifyManaCost(Player player, Item item, ref float reduce, ref float mult) {
-			ItemLoader.ModifyManaCost(item, player, ref reduce, ref mult);
+			ItemLoader.ModifyManaCost.Invoke(item, player, ref reduce, ref mult);
 			PlayerHooks.ModifyManaCost(player, item, ref reduce, ref mult);
 		}
 
 		public static void OnConsumeMana(Player player, Item item, int manaConsumed) {
-			ItemLoader.OnConsumeMana(item, player, manaConsumed);
+			ItemLoader.OnConsumeMana.Invoke(item, player, manaConsumed);
 			PlayerHooks.OnConsumeMana(player, item, manaConsumed);
 		}
 
 		public static void OnMissingMana(Player player, Item item, int neededMana) {
-			ItemLoader.OnMissingMana(item, player, neededMana);
+			ItemLoader.OnMissingMana.Invoke(item, player, neededMana);
 			PlayerHooks.OnMissingMana(player, item, neededMana);
 		}
 
 		//TODO: Fix various inconsistencies with calls of UseItem, and then make this and its inner methods use short-circuiting.
 		public static bool CanUseItem(Player player, Item item) {
-			return PlayerHooks.CanUseItem(player, item) & ItemLoader.CanUseItem(item, player);
+			return PlayerHooks.CanUseItem(player, item) & ItemLoader.CanUseItem.Invoke(item, player);
 		}
 
 		public static bool? CanPlayerHitNPCWithItem(Player player, Item item, NPC npc) {
@@ -54,7 +54,7 @@ namespace Terraria.ModLoader
 				return false;
 			}
 
-			if (!ModifyResult(ItemLoader.CanHitNPC(item, player, npc))) {
+			if (!ModifyResult(ItemLoader.CanHitNPC.Invoke(item, player, npc))) {
 				return false;
 			}
 

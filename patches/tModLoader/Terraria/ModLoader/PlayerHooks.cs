@@ -480,7 +480,7 @@ namespace Terraria.ModLoader
 		}
 
 		public static float TotalUseTimeMultiplier(Player player, Item item) {
-			return UseTimeMultiplier(player, item) * ItemLoader.UseTimeMultiplier(item, player);
+			return UseTimeMultiplier(player, item) * ItemLoader.UseTimeMultiplier.Invoke(item, player);
 		}
 
 		public static int TotalUseTime(float useTime, Player player, Item item) {
@@ -500,7 +500,7 @@ namespace Terraria.ModLoader
 
 		public static float TotalMeleeSpeedMultiplier(Player player, Item item) {
 			return TotalUseTimeMultiplier(player, item) * MeleeSpeedMultiplier(player, item)
-				* ItemLoader.MeleeSpeedMultiplier(item, player);
+				* ItemLoader.MeleeSpeedMultiplier.Invoke(item, player);
 		}
 
 		public static int TotalMeleeTime(float useAnimation, Player player, Item item) {

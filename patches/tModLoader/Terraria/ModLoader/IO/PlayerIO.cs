@@ -83,7 +83,7 @@ namespace Terraria.ModLoader.IO
 		public static List<TagCompound> SaveInventory(Item[] inv) {
 			var list = new List<TagCompound>();
 			for (int k = 0; k < inv.Length; k++) {
-				if (ItemLoader.NeedsModSaving(inv[k])) {
+				if (ItemLoader.NeedsModSaving.Invoke(inv[k])) {
 					var tag = ItemIO.Save(inv[k]);
 					tag.Set("slot", (short)k);
 					list.Add(tag);
@@ -103,12 +103,12 @@ namespace Terraria.ModLoader.IO
 			foreach (KeyValuePair<string, int> item in dictionary) {
 				ContentSamples.ItemNetIdsByPersistentIds.TryGetValue(item.Key, out int netID);
 				ContentSamples.ItemsByType.TryGetValue(netID, out Item realItem);
-				if (ItemLoader.NeedsModSaving(realItem)) {
-					TagCompound tag = new TagCompound {
+
+				if (ItemLoader.NeedsModSaving.Invoke(realItem)) {
+					list.Add(new TagCompound {
 						["sacrificeCount"] = item.Value,
 						["persistentID"] = item.Key
-					};
-					list.Add(tag);
+					});
 				}
 			}
 			return list.Count > 0 ? list : null;
@@ -118,8 +118,10 @@ namespace Terraria.ModLoader.IO
 			foreach (var tag in list) {
 				ContentSamples.ItemNetIdsByPersistentIds.TryGetValue(tag.GetString("persistentID"), out int netID);
 				ContentSamples.ItemsByType.TryGetValue(netID, out Item realItem);
-				if (ItemLoader.NeedsModSaving(realItem)) {
+
+				if (ItemLoader.NeedsModSaving.Invoke(realItem)) {
 					player.creativeTracker.ItemSacrifices._sacrificeCountByItemPersistentId[tag.GetString("persistentID")] = tag.GetInt("sacrificeCount");
+
 					if (ContentSamples.ItemNetIdsByPersistentIds.TryGetValue(tag.GetString("persistentID"), out int value2))
 						player.creativeTracker.ItemSacrifices.SacrificesCountByItemIdCache[value2] = tag.GetInt("sacrificeCount");
 				}

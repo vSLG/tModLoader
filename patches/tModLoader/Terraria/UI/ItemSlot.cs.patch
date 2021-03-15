@@ -95,7 +95,7 @@
 +					if (Main.mouseRight && ((inv[slot].type >= 3318 && inv[slot].type <= 3332) || inv[slot].type == 3860 || inv[slot].type == 3862 || inv[slot].type == 3861 || inv[slot].type == 4782 || inv[slot].type == 4957 || ItemLoader.IsModBossBag(inv[slot]))) {
  						if (Main.mouseRightRelease) {
  							player.OpenBossBag(inv[slot].type);
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -106,7 +106,7 @@
  					else if (Main.mouseRight && inv[slot].type > 0 && inv[slot].type < 5088 && ItemID.Sets.IsFishingCrate[inv[slot].type]) {
  						if (Main.mouseRightRelease) {
  							player.OpenFishingCrate(inv[slot].type);
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -117,7 +117,7 @@
  					else if (Main.mouseRight && inv[slot].type == 3093) {
  						if (Main.mouseRightRelease) {
  							player.OpenHerbBag();
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -128,7 +128,7 @@
  					}
  					else if (Main.mouseRight && inv[slot].type == 1774) {
  						if (Main.mouseRightRelease) {
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -139,7 +139,7 @@
  					}
  					else if (Main.mouseRight && inv[slot].type == 3085) {
  						if (Main.mouseRightRelease && player.ConsumeItem(327)) {
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -150,7 +150,7 @@
  					}
  					else if (Main.mouseRight && inv[slot].type == 1869) {
  						if (Main.mouseRightRelease) {
-+							if (ItemLoader.ConsumeItem(inv[slot], player))
++							if (ItemLoader.ConsumeItem.Invoke(inv[slot], player))
 -							inv[slot].stack--;
 +								inv[slot].stack--;
 +
@@ -161,8 +161,8 @@
  
  						Recipe.FindRecipes();
  					}
-+					else if (ItemLoader.CanRightClick(inv[slot])) {
-+						ItemLoader.RightClick(inv[slot], player);
++					else if (ItemLoader.CanRightClick.Invoke(inv[slot])) {
++						ItemLoader.RightClick.Invoke(inv[slot], player);
 +					}
  					else {
  						result = false;
@@ -172,7 +172,7 @@
  						}
  
 -						if (!flag2)
-+						if (!flag2 || !ItemLoader.CanEquipAccessory(inv[slot], slot - 10))
++						if (!flag2 || !ItemLoader.CanEquipAccessory.Invoke(inv[slot], slot - 10))
  							break;
  
  						Utils.Swap(ref inv[slot], ref inv[slot - 10]);
@@ -215,7 +215,7 @@
  				num11 *= inventoryScale;
  				Vector2 position2 = position + vector / 2f - rectangle2.Size() * num11 / 2f;
  				Vector2 origin = rectangle2.Size() * (scale3 / 2f - 0.5f);
-+				if (!ItemLoader.PreDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(currentColor), item.GetColor(color), origin, num11 * scale3))
++				if (!ItemLoader.PreDrawInInventory.Invoke(item, spriteBatch, position2, rectangle2, item.GetAlpha(currentColor), item.GetColor(color), origin, num11 * scale3))
 +					goto skip;
 +				
  				spriteBatch.Draw(value7, position2, rectangle2, item.GetAlpha(currentColor), 0f, origin, num11 * scale3, SpriteEffects.None, 0f);
@@ -223,7 +223,7 @@
  					spriteBatch.Draw(value7, position2, rectangle2, item.GetColor(color), 0f, origin, num11 * scale3, SpriteEffects.None, 0f);
  
 +				skip:
-+				ItemLoader.PostDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(currentColor), item.GetColor(color), origin, num11 * scale3);
++				ItemLoader.PostDrawInInventory.Invoke(item, spriteBatch, position2, rectangle2, item.GetAlpha(currentColor), item.GetColor(color), origin, num11 * scale3);
  				if (ItemID.Sets.TrapSigned[item.type])
  					spriteBatch.Draw(TextureAssets.Wire.Value, position + new Vector2(40f, 40f) * inventoryScale, new Rectangle(4, 58, 8, 8), color, 0f, new Vector2(4f), 1f, SpriteEffects.None, 0f);
  
@@ -241,7 +241,7 @@
  
  				if (itemCollection[slot].wingSlot > 0 && item.wingSlot > 0)
 -					return false;
-+					return !ItemLoader.CanEquipAccessory(item, slot);
++					return !ItemLoader.CanEquipAccessory.Invoke(item, slot);
  			}
  
  			for (int i = 0; i < itemCollection.Length; i++) {
@@ -250,7 +250,7 @@
  			}
  
 -			return false;
-+			return !ItemLoader.CanEquipAccessory(item, slot);
++			return !ItemLoader.CanEquipAccessory.Invoke(item, slot);
  		}
  
  		private static Item DyeSwap(Item item, out bool success) {
@@ -260,7 +260,7 @@
  
 +				for (int k = 0; k < num2; k++) {
 +					int index = 3 + (accSlotToSwapTo + num2) % num2;
-+					if (ItemLoader.CanEquipAccessory(item, index)) {
++					if (ItemLoader.CanEquipAccessory.Invoke(item, index)) {
 +						accSlotToSwapTo = index - 3;
 +						break;
 +					}
@@ -273,7 +273,7 @@
  						num3 = k;
  				}
  
-+				if (!ItemLoader.CanEquipAccessory(item, num3))
++				if (!ItemLoader.CanEquipAccessory.Invoke(item, num3))
 +					return item;
 +
  				result = player.armor[num3].Clone();

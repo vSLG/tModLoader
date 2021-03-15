@@ -96,14 +96,14 @@ namespace Terraria.ModLoader.Config.UI
 					Vector2 position2 = dimensions.Position() + vector / 2f - rectangle2.Size() * drawScale / 2f;
 					Vector2 origin = rectangle2.Size() * (pulseScale / 2f - 0.5f);
 
-					if (ItemLoader.PreDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
+					if (ItemLoader.PreDrawInInventory.Invoke(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
 						item.GetColor(Color.White), origin, drawScale * pulseScale)) {
 						spriteBatch.Draw(itemTexture, position2, new Rectangle?(rectangle2), item.GetAlpha(newColor), 0f, origin, drawScale * pulseScale, SpriteEffects.None, 0f);
 						if (item.color != Color.Transparent) {
 							spriteBatch.Draw(itemTexture, position2, new Rectangle?(rectangle2), item.GetColor(Color.White), 0f, origin, drawScale * pulseScale, SpriteEffects.None, 0f);
 						}
 					}
-					ItemLoader.PostDrawInInventory(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
+					ItemLoader.PostDrawInInventory.Invoke(item, spriteBatch, position2, rectangle2, item.GetAlpha(newColor),
 						item.GetColor(Color.White), origin, drawScale * pulseScale);
 					if (ItemID.Sets.TrapSigned[type]) {
 						spriteBatch.Draw(TextureAssets.Wire.Value, dimensions.Position() + new Vector2(40f, 40f) * scale, new Rectangle?(new Rectangle(4, 58, 8, 8)), Color.White, 0f, new Vector2(4f), 1f, SpriteEffects.None, 0f);
