@@ -296,11 +296,17 @@ namespace Terraria.ModLoader
 		}
 
 		/// <summary>
-		/// Allows you to make things happen when an item is used. Return true if using the item actually does stuff. Returns false by default.
+		/// Allows you to make things happen when an item is used. The return value controls whether or not ApplyItemTime will be called for the player.
+		/// <br/> Return true if the item actually did something, to force itemTime.
+		/// <br/> Return false to keep itemTime at 0.
+		/// <br/> Return null for vanilla behavior.
 		/// </summary>
-		public virtual bool UseItem(Item item, Player player) {
-			return false;
-		}
+		public virtual bool? UseItem(Item item, Player player) => null;
+
+		/// <summary>
+		/// Allows you to make things happen when an item's use animation starts.
+		/// </summary>
+		public virtual void UseAnimation(Item item, Player player) { }
 
 		/// <summary>
 		/// If the item is consumable and this returns true, then the item will be consumed upon usage. Returns true by default.
