@@ -85,9 +85,8 @@ namespace Terraria.ModLoader.Core
 		<TerrariaSteamPath>{SecurityElement.Escape(tMLDir)}</TerrariaSteamPath>
 		<tMLLibraryPath>$(TerrariaSteamPath)/Libraries</tMLLibraryPath>
 		<tMLName>tModLoader</tMLName>
-		<tMLServerInvoke>tModLoader.dll -server</tMLServerInvoke>
-		<tMLPath>$(TerrariaSteamPath)/$(tMLName).dll</tMLPath>
-		<tMLServerPath>$(TerrariaSteamPath)/$(tMLServerInvoke)</tMLServerPath>
+		<tMLPath>$(tMLName).dll</tMLPath>
+		<tMLServerPath>tModLoader.dll -server</tMLServerPath>
 	</PropertyGroup>
 	<ItemGroup>
 		<Reference Include=""$(TerrariaSteamPath)/$(tMLName).dll"" />
@@ -97,7 +96,7 @@ namespace Terraria.ModLoader.Core
 		<Reference Remove=""$(tMLLibraryPath)/**/*.resources.dll"" />
 	</ItemGroup>
 	<Target Name=""BuildMod"" AfterTargets=""Build"">
-		<Exec Command=""dotnet $(tMLServerName).dll -build $(ProjectDir) -eac $(TargetPath) -define $(DefineConstants) -unsafe $(AllowUnsafeBlocks)"" WorkingDirectory=""$(TerrariaSteamPath)""/>
+		<Exec Command=""dotnet $(tMLServerPath) -build $(ProjectDir) -eac $(TargetPath) -define $(DefineConstants) -unsafe $(AllowUnsafeBlocks)"" WorkingDirectory=""$(TerrariaSteamPath)""/>
 	</Target>
 </Project>";
 
