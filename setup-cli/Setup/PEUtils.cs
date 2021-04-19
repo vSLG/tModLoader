@@ -8,12 +8,13 @@ using System.Text;
 using ICSharpCode.Decompiler.Metadata;
 using System.Reflection;
 using System.Reflection.Emit;
+using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
 
 namespace Terraria.ModLoader.Setup
 {
 	class PEUtils
 	{
-		static public string AssemblyName(PEFile module) => module.Metadata.GetFullAssemblyName();
+		static public string AssemblyTitle(PEFile module) => CustomAttributes(module)[nameof(AssemblyTitleAttribute)];
 
 		static public IDictionary<string, string> CustomAttributes(PEFile module) {
 			var dict = new Dictionary<string, string>();
@@ -39,6 +40,32 @@ namespace Terraria.ModLoader.Setup
 			using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read)) {
 				return new PEFile(path, fileStream, PEStreamOptions.PrefetchEntireImage);
 			}
+		}
+
+		static public IEnumerable<IGrouping<string, TypeDefinitionHandle>> SourceFiles(PEFile module, Func<string, PEFile, string> pathParser = null) {
+			var metadata = module.Metadata;
+
+			return metadata.GetTopLevelTypeDefinitions().GroupBy(i => {
+				var type = metadata.GetTypeDefinition(i);
+				var path = WholeProjectDecompiler.CleanUpFileName(metadata.GetString(type.Name)) + ".cs";
+				string ns = metadata.GetString(type.Namespace);
+
+				if (!string.IsNullOrEmpty(ns))
+					path = Path.Combine(WholeProjectDecompiler.CleanUpFileName(ns), path);
+
+				if (pathParser != null)
+					path = pathParser(path, module);
+
+				return path;
+			});
+		}
+
+		static public IEnumerable<(string path, Resource r)> ResourceFiles(PEFile module, Func<string, PEFile, string> pathParser = null) {
+			return module.Resources.Where(r => r.ResourceType == ResourceType.Embedded).Select(res => {
+				if (pathParser != null)
+					return (pathParser(res.Name, module), res);
+				return (res.Name, res);
+			});
 		}
 
 		private static string[] knownAttributes = {
