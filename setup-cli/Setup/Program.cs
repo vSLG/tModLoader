@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.ComponentModel.DataAnnotations;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace Terraria.ModLoader.Setup
@@ -26,9 +28,20 @@ namespace Terraria.ModLoader.Setup
 	{
 		private Program Parent { get; set; }
 
+		[Option("-e|--terraria-exe <path>", Description = "Path to Terraria executable file (.exe)")]
+		[FileExists]
+		[Required]
+		public string TerrariaExe { get; }
+
+		[Option("-o|--output <directory>", Description = "Path to output directory (defaults to <tML repo>/src/decompiled)")]
+		[DirectoryExists]
+		public string Output { get; set; }
+
 		private int OnExecute(CommandLineApplication app) {
-			Console.WriteLine("Not implemented");
-			return 1;
+			if (string.IsNullOrEmpty(Output))
+				Output = Path.Combine(Parent.TmlRepoPath, "src", "decompiled");
+
+			return new DecompileTask(TerrariaExe, Output).Run();
 		}
 	}
 }
