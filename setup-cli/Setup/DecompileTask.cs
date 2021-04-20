@@ -2,19 +2,21 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Text;
-using ICSharpCode.Decompiler;
-using ICSharpCode.Decompiler.Metadata;
-using ICSharpCode.Decompiler.DebugInfo;
-using ICSharpCode.Decompiler.CSharp;
-using ICSharpCode.Decompiler.CSharp.OutputVisitor;
-using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
+using System.Xml;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Globalization;
+using System.Reflection;
 using System.Threading.Tasks;
-using ICSharpCode.Decompiler.TypeSystem;
-using ICSharpCode.Decompiler.CSharp.Transforms;
 using System.Reflection.PortableExecutable;
+using ICSharpCode.Decompiler;
+using ICSharpCode.Decompiler.Metadata;
+using ICSharpCode.Decompiler.DebugInfo;
+using ICSharpCode.Decompiler.TypeSystem;
+using ICSharpCode.Decompiler.CSharp;
+using ICSharpCode.Decompiler.CSharp.Transforms;
+using ICSharpCode.Decompiler.CSharp.OutputVisitor;
+using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
 
 namespace Terraria.ModLoader.Setup
 {
@@ -52,19 +54,26 @@ namespace Terraria.ModLoader.Setup
 			var files = new HashSet<string>();
 			var resources = new HashSet<string>();
 			var exclude = new List<string>();
+			var decompiledLibraries = new[] { "ReLogic" };
 
-			foreach (var lib in new[] { "ReLogic" }) {
-				// TODO
+			// Decompile embedded library sources directly into Terraria project. Treated the same as Terraria source
+			foreach (var lib in decompiledLibraries) {
+				var libRes = clientModule.Resources.Single(r => r.Name.EndsWith(lib + ".dll"));
+				AddEmbeddedLibrary(libRes, projectDecompiler.AssemblyResolver, items);
+				exclude.Add(SanitizePath(libRes.Name, clientModule));
 			}
 
 			AddModule(clientModule, projectDecompiler.AssemblyResolver, items, files, resources, exclude);
+
+			items.Add(WriteCommonConfigurationFileFuture());
+			items.Add(WriteTerrariaProjectFileFuture(clientModule, files, resources, decompiledLibraries));
 
 			Future.ExecuteParallel(items);
 
 			return 0;
 		}
 
-		private static string GetOutputPath(string path, PEFile module) {
+		private static string SanitizePath(string path, PEFile module) {
 			if (path.EndsWith(".dll")) {
 				var asmRef = module.AssemblyReferences.SingleOrDefault(r => path.EndsWith(r.Name + ".dll"));
 				if (asmRef != null)
@@ -144,14 +153,19 @@ namespace Terraria.ModLoader.Setup
 		) {
 			var projectDir = PEUtils.AssemblyTitle(module);
 
-			var sources = PEUtils.SourceFiles(module, GetOutputPath).Where(gr => {
+			var sources = PEUtils.SourceFiles(module, SanitizePath).Where(gr => {
 				foreach (var td in gr.ToList())
 					return projectDecompiler.IncludeTypeWhenDecompilingProject(module, td);
 				return false;
 			}).ToList();
 
-			var resources = PEUtils.ResourceFiles(module, GetOutputPath).ToList();
-			var ts = new DecompilerTypeSystem(module, projectDecompiler.AssemblyResolver, decompilerSettings);
+			var resources = PEUtils.ResourceFiles(module, SanitizePath).ToList();
+			var ts = new DecompilerTypeSystem(module, resolver, decompilerSettings);
+
+			if (exclude != null) {
+				sources.RemoveAll(src => exclude.Contains(src.Key));
+				resources.RemoveAll(res => exclude.Contains(res.path));
+			}
 
 			items.AddRange(sources
 				.Where(src => sourceSet.Add(src.Key))
@@ -177,6 +191,207 @@ namespace Terraria.ModLoader.Setup
 		private Future ExtractResourceFuture(string name, Resource res, string projectDir)
 			=> new Future(() => ExtractResource(name, res, projectDir));
 
+		private void WriteProjectFile(
+			PEFile module,
+			string outputType,
+			IEnumerable<string> sources,
+			IEnumerable<string> resources,
+			Action<XmlTextWriter> writeSpecificConfig
+		) {
+			var name = PEUtils.AssemblyTitle(module);
+			var filename = name + ".csproj";
+			var path = Path.Combine(outputDir, name, filename);
+			FSUtils.CreateParentDirectory(path);
+
+			Console.WriteLine($"Writing project file {path}");
+
+			using (var sw = new StreamWriter(path))
+			using (var w = new XmlTextWriter(sw)) {
+				w.Formatting = System.Xml.Formatting.Indented;
+				w.WriteStartElement("Project");
+				w.WriteAttributeString("Sdk", "Microsoft.NET.Sdk");
+
+				w.WriteStartElement("Import");
+				w.WriteAttributeString("Project", "../Configuration.targets");
+				w.WriteEndElement(); // </Import>
+
+				w.WriteStartElement("PropertyGroup");
+				w.WriteElementString("OutputType", outputType);
+
+				var attribs = PEUtils.CustomAttributes(module);
+				w.WriteElementString("Version", new AssemblyName(module.FullName).Version.ToString());
+				w.WriteElementString("Company", attribs[nameof(AssemblyCompanyAttribute)]);
+				w.WriteElementString("Copyright", attribs[nameof(AssemblyCopyrightAttribute)]);
+
+				w.WriteElementString("RootNamespace", module.Name);
+				w.WriteEndElement(); // </PropertyGroup>
+
+				writeSpecificConfig(w);
+
+				// resources
+				w.WriteStartElement("ItemGroup");
+				foreach (var r in ApplyWildcards(resources, sources.ToArray()).OrderBy(r => r)) {
+					w.WriteStartElement("EmbeddedResource");
+					w.WriteAttributeString("Include", r);
+					w.WriteEndElement();
+				}
+				w.WriteEndElement(); // </ItemGroup>
+				w.WriteEndElement(); // </Project>
+
+				sw.Write(Environment.NewLine);
+			}
+		}
+
+		private Future WriteProjectFileFuture(
+			PEFile module,
+			string outputType,
+			IEnumerable<string> sources,
+			IEnumerable<string> resources,
+			Action<XmlTextWriter> writeSpecificConfig
+		) => new Future(() => WriteProjectFile(module, outputType, sources, resources, writeSpecificConfig));
+
+		private IEnumerable<string> ApplyWildcards(IEnumerable<string> include, IReadOnlyList<string> exclude) {
+			var wildpaths = new HashSet<string>();
+			foreach (var path in include) {
+				if (wildpaths.Any(path.StartsWith))
+					continue;
+
+				string wpath = path;
+				string cards = "";
+				while (wpath.Contains('/')) {
+					var parent = wpath.Substring(0, wpath.LastIndexOf('/'));
+					if (exclude.Any(e => e.StartsWith(parent)))
+						break; // Can't use parent as a wildcard
+
+					wpath = parent;
+					if (cards.Length < 2)
+						cards += "*";
+				}
+
+				if (wpath != path) {
+					wildpaths.Add(wpath);
+					yield return $"{wpath}/{cards}";
+				}
+				else {
+					yield return path;
+				}
+			}
+		}
+
+		private void AddEmbeddedLibrary(Resource res, IAssemblyResolver resolver, List<Future> items) {
+			using var s = res.TryOpenStream();
+			s.Position = 0;
+
+			var module = new PEFile(res.Name, s, PEStreamOptions.PrefetchEntireImage);
+			var files = new HashSet<string>();
+			var resources = new HashSet<string>();
+
+			AddModule(module, resolver, items, files, resources);
+
+			items.Add(WriteProjectFileFuture(module, "Library", files, resources, w => {
+				// References
+				w.WriteStartElement("ItemGroup");
+				foreach (var r in module.AssemblyReferences.OrderBy(r => r.Name)) {
+					if (r.Name == "mscorlib")
+						continue;
+
+					w.WriteStartElement("Reference");
+					w.WriteAttributeString("Include", r.Name);
+					w.WriteEndElement();
+				}
+				w.WriteEndElement(); // </ItemGroup>
+
+				// TODO: resolve references to embedded terraria libraries with their HintPath
+			}));
+		}
+
+		private Future WriteTerrariaProjectFileFuture(
+			PEFile module,
+			IEnumerable<string> sources,
+			IEnumerable<string> resources,
+			ICollection<string> decompiledLibraries
+		) {
+			return WriteProjectFileFuture(module, "Exe", sources, resources, w => {
+				//configurations
+				w.WriteStartElement("PropertyGroup");
+				w.WriteAttributeString("Condition", "$(Configuration.Contains('Server'))");
+				w.WriteElementString("OutputType", "Exe");
+				w.WriteElementString("OutputName", "$(OutputName)Server");
+				w.WriteEndElement(); // </PropertyGroup>
+
+				// references
+				w.WriteStartElement("ItemGroup");
+				foreach (var r in module.AssemblyReferences.OrderBy(r => r.Name)) {
+					if (r.Name == "mscorlib")
+						continue;
+
+					if (decompiledLibraries?.Contains(r.Name) ?? false) {
+						w.WriteStartElement("ProjectReference");
+						w.WriteAttributeString("Include", $"../{r.Name}/{r.Name}.csproj");
+						w.WriteEndElement();
+
+						w.WriteStartElement("EmbeddedResource");
+						w.WriteAttributeString("Include", $"../{r.Name}/bin/$(Configuration)/$(TargetFramework)/{r.Name}.dll");
+						w.WriteElementString("LogicalName", $"Terraria.Libraries.{r.Name}.{r.Name}.dll");
+					}
+					else {
+						w.WriteStartElement("Reference");
+						w.WriteAttributeString("Include", r.Name);
+					}
+					w.WriteEndElement();
+				}
+				w.WriteEndElement(); // </ItemGroup>
+
+			});
+		}
+
+		private void WriteCommonConfigurationFile() {
+			var filename = "Configuration.targets";
+			var path = Path.Combine(outputDir, filename);
+			FSUtils.CreateParentDirectory(path);
+
+			Console.WriteLine($"Writing project file {path}");
+
+			using (var sw = new StreamWriter(path))
+			using (var w = new XmlTextWriter(sw)) {
+				w.Formatting = System.Xml.Formatting.Indented;
+				w.WriteStartElement("Project");
+
+				w.WriteStartElement("PropertyGroup");
+				w.WriteElementString("TargetFramework", "net40");
+				w.WriteElementString("LangVersion", "8.0");
+				w.WriteElementString("Configurations", "Debug;Release;ServerDebug;ServerRelease");
+				w.WriteElementString("AssemblySearchPaths", "$(AssemblySearchPaths);{GAC}");
+				w.WriteElementString("PlatformTarget", "x86");
+				w.WriteElementString("AllowUnsafeBlocks", "true");
+				w.WriteElementString("Optimize", "true");
+				w.WriteEndElement(); // </PropertyGroup>
+
+				//configurations
+				w.WriteStartElement("PropertyGroup");
+				w.WriteAttributeString("Condition", "$(Configuration.Contains('Server'))");
+				w.WriteElementString("DefineConstants", "$(DefineConstants);SERVER");
+				w.WriteEndElement(); // </PropertyGroup>
+
+				w.WriteStartElement("PropertyGroup");
+				w.WriteAttributeString("Condition", "!$(Configuration.Contains('Server'))");
+				w.WriteElementString("DefineConstants", "$(DefineConstants);CLIENT");
+				w.WriteEndElement(); // </PropertyGroup>
+
+				w.WriteStartElement("PropertyGroup");
+				w.WriteAttributeString("Condition", "$(Configuration.Contains('Debug'))");
+				w.WriteElementString("Optimize", "false");
+				w.WriteElementString("DefineConstants", "$(DefineConstants);DEBUG");
+				w.WriteEndElement(); // </PropertyGroup>
+
+				w.WriteEndElement(); // </Project>
+
+				sw.Write(Environment.NewLine);
+			}
+		}
+
+		private Future WriteCommonConfigurationFileFuture()
+			=> new Future(() => WriteCommonConfigurationFile());
 
 		private class EmbeddedAssemblyResolver : IAssemblyResolver
 		{

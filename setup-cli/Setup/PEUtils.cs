@@ -1,11 +1,11 @@
 ﻿using System;
 using System.IO;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.PortableExecutable;
-using System.Reflection.Metadata;
-using ICSharpCode.Decompiler.Metadata;
+using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
+using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
 
 namespace Terraria.ModLoader.Setup
