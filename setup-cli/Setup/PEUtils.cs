@@ -4,10 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.PortableExecutable;
 using System.Reflection.Metadata;
-using System.Text;
 using ICSharpCode.Decompiler.Metadata;
 using System.Reflection;
-using System.Reflection.Emit;
 using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
 
 namespace Terraria.ModLoader.Setup
