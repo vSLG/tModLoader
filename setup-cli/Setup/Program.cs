@@ -1,5 +1,6 @@
 ﻿using McMaster.Extensions.CommandLineUtils;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 
@@ -8,7 +9,7 @@ namespace Terraria.ModLoader.Setup
 	[Command(Name = "setup", Description = "tML code patcher & decompiler tool")]
 	[Subcommand(
 		typeof(Decompile),
-		typeof(PatchTerraria)
+		typeof(Patch)
 	)]
 	[HelpOption("-h|--help")]
 	class Program
@@ -49,44 +50,44 @@ namespace Terraria.ModLoader.Setup
 		}
 	}
 
-	[Command(Description = "Applies patches to fix decompile errors")]
+	[Command(
+		Description = "Applies patches to fix decompile errors. " +
+						 "If no options specified, patch both Terraria and tModLoader."
+	)]
 	[HelpOption("-h|--help")]
-	class PatchTerraria
+	class Patch
 	{
-		[Option(
-			"-t|--terraria-source <directory>",
-			Description = "Path to decompiled Terraria source directory " +
-						  "(defaults to <tML repo>/src/decompiled)"
-		)]
-		[DirectoryExists]
-		public string TerrariaSource { get; set; }
+		[Option("-t", Description = "Patch Terraria")]
+		public bool PatchTerraria { get; set; }
 
-		[Option(
-			"-o|--output <directory>",
-			Description = "Path to write patched source files " +
-						  "(defaults to <tML repo>/src/Terraria)"
-		)]
-		[DirectoryNotExists]
-		public string Output { get; set; }
+		[Option("-tml", Description = "Patch tModLoader")]
+		public bool PatchTModLoader { get; set; }
 
 		private Program Parent { get; set; }
 
 		private int OnExecute(CommandLineApplication app) {
-			if (string.IsNullOrEmpty(TerrariaSource))
-				TerrariaSource = Path.Combine(Parent.TmlRepoPath, "src", "decompiled");
+			if (!(PatchTerraria || PatchTModLoader))
+				PatchTerraria = PatchTModLoader = true;
 
-			if (string.IsNullOrEmpty(Output))
-				Output = Path.Combine(Parent.TmlRepoPath, "src", "Terraria");
+			var projects = new List<string>();
 
-			Console.WriteLine(TerrariaSource);
-			Console.WriteLine(Output);
+			if (PatchTerraria)
+				projects.Add("Terraria");
 
-			return new PatchTask(
-				patchDir: Path.Join(Parent.TmlRepoPath, "patches", "Terraria"),
-				sourceDir: TerrariaSource,
-				outputDir: Output,
-				tmlDir: Parent.TmlRepoPath
-			).Run();
+			if (PatchTModLoader)
+				projects.Add("tModLoader");
+
+			int ret = 0;
+
+			foreach (var project in projects)
+				ret += new PatchTask(
+					patchDir: Path.Join(Parent.TmlRepoPath, "patches", project),
+					sourceDir: Path.Join(Parent.TmlRepoPath, "src", project == "Terraria" ? "decompiled" : "Terraria"),
+					outputDir: Path.Join(Parent.TmlRepoPath, "src", project),
+					tmlDir: Parent.TmlRepoPath
+				).Run();
+
+			return ret;
 		}
 	}
 }

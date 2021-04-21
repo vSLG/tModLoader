@@ -359,7 +359,6 @@ namespace Terraria.ModLoader.Setup
 
 				w.WriteStartElement("PropertyGroup");
 				w.WriteElementString("TargetFramework", "net40");
-				w.WriteElementString("LangVersion", "8.0");
 				w.WriteElementString("Configurations", "Debug;Release;ServerDebug;ServerRelease");
 				w.WriteElementString("AssemblySearchPaths", "$(AssemblySearchPaths);{GAC}");
 				w.WriteElementString("PlatformTarget", "x86");

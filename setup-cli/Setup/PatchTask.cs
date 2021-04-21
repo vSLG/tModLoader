@@ -78,8 +78,8 @@ namespace Terraria.ModLoader.Setup
 			}
 
 			try {
-				FSUtils.CreateDirectory(OutputDir);
-				logFile = new StreamWriter(Path.Combine(OutputDir, "patch.log"));
+				FSUtils.CreateDirectory(Path.Combine(TmlDir, "setup-cli", "log"));
+				logFile = new StreamWriter(Path.Combine(TmlDir, "setup-cli", "log", "patch.log"));
 				Future.ExecuteParallel(items);
 			}
 			finally {
@@ -127,7 +127,7 @@ namespace Terraria.ModLoader.Setup
 				0,
 				$"{patcher.patchFile.basePath}," +
 				$"\texact: {exact},\toffset: {offset}," +
-				$"\tfuzzy: {fuzzy}"//,\tfailed: {failures}"
+				$"\tfuzzy: {fuzzy},\tfailed: {failures}"
 				+ Environment.NewLine
 			);
 
