@@ -126,7 +126,8 @@ namespace Terraria.ModLoader.Setup
 					.DecompileTypes(src.ToArray())
 					.AcceptVisitor(new CSharpOutputVisitor(w, decompilerSettings.CSharpFormattingOptions));
 
-				File.WriteAllText(path, w.ToString());
+				Console.WriteLine($"Formatting {path}");
+				File.WriteAllText(path, FormatTask.Format(w.ToString(), true));
 			}
 		}
 
@@ -311,7 +312,7 @@ namespace Terraria.ModLoader.Setup
 			IEnumerable<string> resources,
 			ICollection<string> decompiledLibraries
 		) {
-			return WriteProjectFileFuture(module, "Exe", sources, resources, w => {
+			return WriteProjectFileFuture(module, "WinExe", sources, resources, w => {
 				//configurations
 				w.WriteStartElement("PropertyGroup");
 				w.WriteAttributeString("Condition", "$(Configuration.Contains('Server'))");
@@ -413,7 +414,7 @@ namespace Terraria.ModLoader.Setup
 					var resName = name.Name + ".dll";
 					var res = baseModule.Resources.Where(r => r.ResourceType == ResourceType.Embedded).SingleOrDefault(r => r.Name.EndsWith(resName));
 
-					if (res != null)
+					if (res != null && !res.IsNil)
 						module = new PEFile(res.Name, res.TryOpenStream());
 
 					if (module == null)
@@ -424,13 +425,16 @@ namespace Terraria.ModLoader.Setup
 				}
 			}
 
-			public Task<PEFile> ResolveAsync(IAssemblyReference reference) {
-				return System.Threading.Tasks.Task.Run(() => Resolve(reference));
-			}
-
 			public PEFile ResolveModule(PEFile mainModule, string moduleName) => _resolver.ResolveModule(mainModule, moduleName);
 
-			public Task<PEFile> ResolveModuleAsync(PEFile mainModule, string moduleName) => ((IAssemblyResolver)_resolver).ResolveModuleAsync(mainModule, moduleName);
+			public bool IsGacAssembly(IAssemblyReference name) {
+				try {
+					return Assembly.ReflectionOnlyLoad(name.FullName).GlobalAssemblyCache;
+				}
+				catch {
+					return false;
+				}
+			}
 		}
 
 		private class ExtendedProjectDecompiler : WholeProjectDecompiler
@@ -438,9 +442,8 @@ namespace Terraria.ModLoader.Setup
 			public ExtendedProjectDecompiler(
 				DecompilerSettings settings,
 				IAssemblyResolver assemblyResolver,
-				AssemblyReferenceClassifier assemblyReferenceClassifier = null,
 				IDebugInfoProvider debugInfoProvider = null
-			) : base(settings, assemblyResolver, assemblyReferenceClassifier, debugInfoProvider) { }
+			) : base(settings, assemblyResolver, debugInfoProvider) { }
 
 			public new bool IncludeTypeWhenDecompilingProject(PEFile module, TypeDefinitionHandle type) => base.IncludeTypeWhenDecompilingProject(module, type);
 		}

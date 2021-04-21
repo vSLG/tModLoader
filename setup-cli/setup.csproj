@@ -8,8 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ICSharpCode.Decompiler" Version="7.0.0.6485-rc2" />
+    <PackageReference Include="ICSharpCode.Decompiler" Version="6.0.0.5836" />
     <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="3.1.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="3.4.0" />
+    <PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="20.5.7.1" />
   </ItemGroup>
 
   <ItemGroup>

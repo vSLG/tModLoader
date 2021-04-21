@@ -45,36 +45,37 @@ namespace Terraria.ModLoader.Setup
 						 new HashSet<string>();
 
 			foreach (var file in allPatches) {
+				var relativePath = Path.GetRelativePath(PatchDir, file);
+				var dest = Path.Combine(OutputDir, relativePath);
+
 				if (file.EndsWith(".patch")) {
-					items.Add(new Future(() => newFiles.Add(Patch(file).PatchedPath)));
-					noCopy.Add(file.Substring(0, file.Length - 6));
+					items.Add(new Future(() => Patch(file)));
+					noCopy.Add(relativePath.Substring(0, relativePath.Length - 6));
+					newFiles.Add(relativePath.Substring(0, relativePath.Length - 6));
 				}
 				else if (Path.GetFileName(file) != "removed_files.list") {
-					var relativePath = Path.GetRelativePath(PatchDir, file);
-					var dest = Path.Combine(OutputDir, relativePath);
-
 					items.Add(new Future(() => {
 						Console.WriteLine($"Copying {relativePath}");
 						FSUtils.Copy(file, dest);
 					}));
 
-					newFiles.Add(dest);
+					newFiles.Add(relativePath);
 				}
 			}
 
 			foreach (var file in EnumerateSrcFiles(SourceDir)) {
-				if (noCopy.Contains(file))
-					continue;
-
 				var relativePath = Path.GetRelativePath(SourceDir, file);
 				var dest = Path.Combine(OutputDir, relativePath);
+
+				if (noCopy.Contains(relativePath))
+					continue;
 
 				items.Add(new Future(() => {
 					Console.WriteLine($"Copying {relativePath}");
 					FSUtils.Copy(file, dest);
 				}));
 
-				newFiles.Add(dest);
+				newFiles.Add(relativePath);
 			}
 
 			try {
@@ -86,9 +87,14 @@ namespace Terraria.ModLoader.Setup
 				logFile?.Close();
 			}
 
-			foreach (var file in EnumerateSrcFiles(OutputDir))
-				if (!newFiles.Contains(file))
+			foreach (string file in EnumerateSrcFiles(OutputDir)) {
+				var relativePath = Path.GetRelativePath(OutputDir, file);
+
+				if (!newFiles.Contains(relativePath)) {
 					File.Delete(file);
+					Console.WriteLine($"Delete {relativePath}");
+				}
+			}
 
 			return 0;
 		}
